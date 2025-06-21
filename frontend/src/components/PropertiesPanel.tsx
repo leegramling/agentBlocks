@@ -101,6 +101,43 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
           condition: { type: 'string', label: 'Condition/Iterator' },
           maxIterations: { type: 'number', label: 'Max Iterations' }
         };
+      // New coding block types
+      case 'variable':
+        return {
+          name: { type: 'string', label: 'Variable Name' },
+          value: { type: 'string', label: 'Value' }
+        };
+      case 'print':
+        return {
+          message: { type: 'string', label: 'Message to Print' }
+        };
+      case 'assignment':
+        return {
+          variable: { type: 'string', label: 'Variable Name' },
+          expression: { type: 'string', label: 'Expression' }
+        };
+      case 'if-then':
+        return {
+          condition: { type: 'string', label: 'Condition' }
+        };
+      case 'foreach':
+        return {
+          iterable: { type: 'string', label: 'Iterable' },
+          variable: { type: 'string', label: 'Loop Variable' }
+        };
+      case 'while':
+        return {
+          condition: { type: 'string', label: 'Condition' }
+        };
+      case 'function':
+        return {
+          name: { type: 'string', label: 'Function Name' },
+          parameters: { type: 'string', label: 'Parameters' }
+        };
+      case 'execute':
+        return {
+          command: { type: 'string', label: 'Command to Execute' }
+        };
       default:
         return {};
     }

@@ -18,6 +18,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
 
   const blockCards = [
     { type: 'variable', name: 'Variable', className: 'variable' },
+    { type: 'print', name: 'Print', className: 'print' },
     { type: 'assignment', name: 'Assignment', className: 'assignment' },
     { type: 'if-then', name: 'If/Then', className: 'if-then' },
     { type: 'foreach', name: 'ForEach', className: 'foreach' },

@@ -114,7 +114,116 @@ body {
   flex: 1;
   overflow: hidden;
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 48px);
+}
+
+.editor-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.console-panel {
+  height: 200px;
+  background-color: #0f172a;
+  border-top: 1px solid #374151;
+  display: flex;
+  flex-direction: column;
+}
+
+.console-header {
+  background-color: #1e293b;
+  border-bottom: 1px solid #374151;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.console-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.console-controls {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.console-button {
+  background-color: #374151;
+  border: none;
+  color: #d1d5db;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.console-button:hover {
+  background-color: #4b5563;
+}
+
+.console-button.execute {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+.console-button.execute:hover {
+  background-color: #047857;
+}
+
+.console-button.disabled,
+.console-button:disabled {
+  background-color: #374151;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.console-button.disabled:hover,
+.console-button:disabled:hover {
+  background-color: #374151;
+}
+
+.console-output {
+  flex: 1;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #e2e8f0;
+  background-color: #0f172a;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.output-line {
+  margin-bottom: 4px;
+}
+
+.output-line.info {
+  color: #60a5fa;
+}
+
+.output-line.success {
+  color: #34d399;
+}
+
+.output-line.error {
+  color: #f87171;
+}
+
+.output-line.code {
+  color: #fbbf24;
+  background-color: rgba(251, 191, 36, 0.1);
+  padding: 2px 4px;
+  border-radius: 2px;
+  display: inline-block;
+  margin: 2px 0;
 }
 
 /* Main Layout for both editors */
@@ -209,6 +318,10 @@ body {
 
 .block-card.execute {
   background-color: #ef4444;
+}
+
+.block-card.print {
+  background-color: #10b981;
 }
 
 .toolbar-button {

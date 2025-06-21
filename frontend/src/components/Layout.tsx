@@ -1,10 +1,23 @@
 import React from 'react';
+import Console from './Console';
 
 interface LayoutProps {
   children: React.ReactNode;
+  consoleOutput?: string[];
+  isExecuting?: boolean;
+  onExecute?: () => void;
+  onClearConsole?: () => void;
+  onGenerateCode?: () => string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  consoleOutput = [], 
+  isExecuting = false, 
+  onExecute, 
+  onClearConsole,
+  onGenerateCode 
+}) => {
   return (
     <div className="layout">
       {/* Menu Bar */}
@@ -21,7 +34,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
         <div className="menu-right">
           <button className="action-button btn-save">Save</button>
-          <button className="action-button btn-execute">Execute</button>
+          <button 
+            className="action-button btn-execute"
+            onClick={onExecute}
+            disabled={isExecuting}
+          >
+            {isExecuting ? 'Running...' : 'Execute'}
+          </button>
           <button className="action-button btn-export">Export</button>
         </div>
       </div>
@@ -29,6 +48,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Main Content */}
       <div className="main-content">
         {children}
+        
+        {/* Console Panel */}
+        <Console 
+          output={consoleOutput}
+          isExecuting={isExecuting}
+          onExecute={onExecute || (() => {})}
+          onClear={onClearConsole || (() => {})}
+          onGenerateCode={onGenerateCode}
+        />
       </div>
     </div>
   );

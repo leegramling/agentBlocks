@@ -26,6 +26,7 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
 
   const getNodeIcon = (type: string) => {
     const icons: Record<string, string> = {
+      // Original node types
       bash: '💻',
       regex: '🔍',
       curl: '🌐',
@@ -35,25 +36,44 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       conditional: '❓',
       loop: '🔄',
       transform: '⚙️',
-      agent: '🤖'
+      agent: '🤖',
+      // New coding block types
+      variable: '📦',
+      assignment: '➡️',
+      'if-then': '🔀',
+      foreach: '🔁',
+      while: '⭕',
+      function: '🔧',
+      execute: '▶️',
+      print: '🖨️'
     };
     return icons[type] || '📦';
   };
 
   const getNodeColor = (type: string) => {
     const colors: Record<string, string> = {
-      bash: 'bg-blue-600',
-      regex: 'bg-purple-600',
-      curl: 'bg-green-600',
-      scp: 'bg-orange-600',
-      input: 'bg-gray-600',
-      output: 'bg-gray-600',
-      conditional: 'bg-yellow-600',
-      loop: 'bg-red-600',
-      transform: 'bg-indigo-600',
-      agent: 'bg-pink-600'
+      // Original node types
+      bash: '#3b82f6',
+      regex: '#8b5cf6',
+      curl: '#10b981',
+      scp: '#f97316',
+      input: '#6b7280',
+      output: '#6b7280',
+      conditional: '#eab308',
+      loop: '#ef4444',
+      transform: '#6366f1',
+      agent: '#ec4899',
+      // New coding block types (matching left panel colors)
+      variable: '#f97316',
+      assignment: '#eab308',
+      'if-then': '#22c55e',
+      foreach: '#8b5cf6',
+      while: '#ec4899',
+      function: '#3b82f6',
+      execute: '#ef4444',
+      print: '#10b981'
     };
-    return colors[type] || 'bg-gray-600';
+    return colors[type] || '#6b7280';
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -110,79 +130,89 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
     }
   };
 
+  const getNodeProperties = () => {
+    switch (node.type) {
+      case 'variable':
+        return (
+          <div style={{fontSize: '12px', color: '#d1d5db', marginTop: '4px'}}>
+            <strong>Value:</strong> {node.properties.value || 'hello world'}
+          </div>
+        );
+      case 'print':
+        return (
+          <div style={{fontSize: '12px', color: '#d1d5db', marginTop: '4px'}}>
+            <strong>Message:</strong> {node.properties.message || 'Hello, World!'}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div
       ref={nodeRef}
-      className={`absolute select-none cursor-move ${
-        selected ? 'ring-2 ring-blue-400' : ''
-      }`}
       style={{
+        position: 'absolute',
         left: node.position.x,
         top: node.position.y,
-        minWidth: '200px'
+        minWidth: '180px',
+        userSelect: 'none',
+        cursor: 'move',
+        outline: selected ? '2px solid #60a5fa' : 'none',
+        borderRadius: '8px'
       }}
       onMouseDown={handleMouseDown}
     >
-      <div className={`rounded-lg shadow-lg border-2 ${
-        selected ? 'border-blue-400' : 'border-gray-600'
-      } bg-gray-800`}>
+      <div 
+        style={{
+          borderRadius: '8px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+          border: `2px solid ${selected ? '#60a5fa' : '#4b5563'}`,
+          backgroundColor: '#1f2937',
+          overflow: 'hidden'
+        }}
+      >
         {/* Node Header */}
-        <div className={`${getNodeColor(node.type)} rounded-t-lg p-3 flex items-center space-x-2`}>
-          <span className="text-lg">{getNodeIcon(node.type)}</span>
-          <div className="flex-1">
-            <div className="font-medium text-white text-sm">
+        <div 
+          style={{
+            backgroundColor: getNodeColor(node.type),
+            padding: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <span style={{fontSize: '18px'}}>{getNodeIcon(node.type)}</span>
+          <div style={{flex: 1}}>
+            <div style={{
+              fontWeight: '600',
+              color: '#ffffff',
+              fontSize: '14px'
+            }}>
               {node.type.charAt(0).toUpperCase() + node.type.slice(1)}
             </div>
-            <div className="text-xs text-white opacity-75">
-              {node.id}
+            <div style={{
+              fontSize: '11px',
+              color: 'rgba(255, 255, 255, 0.7)'
+            }}>
+              ID: {node.id.split('_')[1]}
             </div>
           </div>
         </div>
 
         {/* Node Body */}
-        <div className="p-3">
-          {/* Inputs */}
-          {node.inputs.length > 0 && (
-            <div className="mb-2">
-              <div className="text-xs text-gray-400 mb-1">Inputs</div>
-              {node.inputs.map(input => (
-                <div
-                  key={input.id}
-                  onClick={() => handleInputClick(input.id)}
-                  className="flex items-center space-x-2 text-xs text-gray-300 mb-1 cursor-pointer hover:text-white"
-                >
-                  <div className={`w-2 h-2 rounded-full border-2 ${
-                    connecting ? 'border-green-400' : 'border-gray-500'
-                  }`} />
-                  <span>{input.name}</span>
-                  {input.required && <span className="text-red-400">*</span>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Outputs */}
-          {node.outputs.length > 0 && (
-            <div>
-              <div className="text-xs text-gray-400 mb-1">Outputs</div>
-              {node.outputs.map(output => (
-                <div
-                  key={output.id}
-                  onClick={() => handleOutputClick(output.id)}
-                  className="flex items-center justify-end space-x-2 text-xs text-gray-300 mb-1 cursor-pointer hover:text-white"
-                >
-                  <span>{output.name}</span>
-                  <div className="w-2 h-2 rounded-full bg-blue-400" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Double-click hint */}
-        <div className="px-3 pb-2">
-          <div className="text-xs text-gray-500 text-center">
-            Double-click to edit blocks
+        <div style={{padding: '12px'}}>
+          {getNodeProperties()}
+          
+          {/* Simplified display - no complex inputs/outputs for coding blocks */}
+          <div style={{
+            marginTop: '8px',
+            fontSize: '11px',
+            color: '#9ca3af',
+            textAlign: 'center'
+          }}>
+            Double-click to edit • Click to select
           </div>
         </div>
       </div>
