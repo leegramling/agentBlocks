@@ -425,6 +425,46 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }));
   }, [panels]);
   
+  const handleNodeReorder = useCallback((panelId: string, nodeId: string, newIndex: number) => {
+    setNodes(prev => {
+      const panelNodes = prev.filter(node => node.panelId === panelId).sort((a, b) => a.position.y - b.position.y);
+      const targetNode = prev.find(node => node.id === nodeId);
+      
+      if (!targetNode || !panelNodes.length) return prev;
+      
+      // Remove the dragged node from its current position
+      const filteredNodes = panelNodes.filter(node => node.id !== nodeId);
+      
+      // Insert at new position
+      const reorderedPanelNodes = [...filteredNodes];
+      reorderedPanelNodes.splice(newIndex, 0, targetNode);
+      
+      // Update positions for all nodes in the panel
+      const panel = panels.find(p => p.id === panelId);
+      if (panel) {
+        const updatedNodes = prev.map(node => {
+          if (node.panelId === panelId) {
+            const nodeIndex = reorderedPanelNodes.findIndex(n => n.id === node.id);
+            if (nodeIndex !== -1) {
+              return {
+                ...node,
+                position: {
+                  x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
+                  y: panel.position.y + 56 + (nodeIndex * 52) // header + padding + spacing
+                }
+              };
+            }
+          }
+          return node;
+        });
+        
+        return updatedNodes;
+      }
+      
+      return prev;
+    });
+  }, [panels]);
+  
   const handleDeleteSelectedNode = useCallback(() => {
     if (selectedNode) {
       setNodes(prev => prev.filter(node => node.id !== selectedNode.id));
@@ -578,6 +618,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               onNodeDrop={handleNodeDropInPanel}
               onToggleExpanded={handleTogglePanelExpanded}
               onNodeDrag={handleNodeDragInPanel}
+              onNodeReorder={handleNodeReorder}
             />
           ))}
 

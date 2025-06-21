@@ -11,6 +11,7 @@ interface PanelComponentProps {
   onNodeDrop: (panelId: string, position: Position, blockType: string, insertAfterNodeId?: string) => void;
   onToggleExpanded: (panelId: string) => void;
   onNodeDrag: (nodeId: string, position: Position) => void;
+  onNodeReorder: (panelId: string, nodeId: string, newIndex: number) => void;
 }
 
 const PanelComponent: React.FC<PanelComponentProps> = ({
@@ -22,11 +23,14 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
   onResize,
   onNodeDrop,
   onToggleExpanded,
-  onNodeDrag
+  onNodeDrag,
+  onNodeReorder
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Calculate panel nodes and their bounds
@@ -44,15 +48,16 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
 
     // Panel should be exactly node width + padding
     const nodeWidth = 220;
-    const padding = 32; // 16px on each side
+    const horizontalPadding = 32; // 16px on each side
+    const verticalPadding = 32; // 16px on top and bottom
     const nodeHeight = 44;
     const nodeSpacing = 8;
     
     const headerHeight = 40;
-    const contentHeight = (panelNodes.length * nodeHeight) + ((panelNodes.length - 1) * nodeSpacing) + padding;
+    const contentHeight = (panelNodes.length * nodeHeight) + ((panelNodes.length - 1) * nodeSpacing) + verticalPadding;
 
     return {
-      width: nodeWidth + padding,
+      width: nodeWidth + horizontalPadding,
       height: headerHeight + contentHeight
     };
   };
@@ -150,9 +155,38 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
     }
   };
   
-  const handleNodeMouseDown = (nodeId: string, e: React.MouseEvent) => {
+  const handleNodeDragStart = (e: React.DragEvent, nodeId: string) => {
     e.stopPropagation();
-    // Handle node dragging within panel
+    setDraggedNodeId(nodeId);
+    e.dataTransfer.setData('nodeId', nodeId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleNodeDragOver = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (draggedNodeId) {
+      setDragOverIndex(targetIndex);
+    }
+  };
+
+  const handleNodeDragEnd = () => {
+    setDraggedNodeId(null);
+    setDragOverIndex(null);
+  };
+
+  const handleNodeDropOnNode = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const nodeId = e.dataTransfer.getData('nodeId');
+    if (nodeId && nodeId !== panelNodes[targetIndex]?.id) {
+      onNodeReorder(panel.id, nodeId, targetIndex);
+    }
+    
+    setDraggedNodeId(null);
+    setDragOverIndex(null);
   };
 
   return (
@@ -204,21 +238,54 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
 
       {panel.isExpanded && (
         <div className="panel-content">
-          {/* Render nodes with relative positioning */}
+          {/* Render node placeholders for drag and drop ordering */}
           {panelNodes
             .sort((a, b) => (a.position.y || 0) - (b.position.y || 0))
             .map((node, index) => (
-              <div
-                key={node.id}
-                className="panel-node"
-                style={{
-                  position: 'relative',
-                  marginBottom: index < panelNodes.length - 1 ? '8px' : '0',
-                  left: (node.indentLevel || 0) * 24
-                }}
-                onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
-              >
-                {/* Node will be rendered by parent WorkflowEditor */}
+              <div key={node.id}>
+                {/* Drop zone above node */}
+                {draggedNodeId && draggedNodeId !== node.id && (
+                  <div
+                    className={`node-drop-zone ${dragOverIndex === index ? 'drag-over' : ''}`}
+                    onDragOver={(e) => handleNodeDragOver(e, index)}
+                    onDrop={(e) => handleNodeDropOnNode(e, index)}
+                    style={{ height: '4px', margin: '2px 0' }}
+                  />
+                )}
+                
+                {/* Node container */}
+                <div
+                  className={`panel-node ${draggedNodeId === node.id ? 'dragging' : ''}`}
+                  style={{
+                    position: 'relative',
+                    marginBottom: index < panelNodes.length - 1 ? '8px' : '0',
+                    paddingLeft: (node.indentLevel || 0) * 24,
+                    opacity: draggedNodeId === node.id ? 0.5 : 1
+                  }}
+                  draggable
+                  onDragStart={(e) => handleNodeDragStart(e, node.id)}
+                  onDragEnd={handleNodeDragEnd}
+                >
+                  {/* Drag handle */}
+                  <div className="node-drag-handle" title="Drag to reorder">
+                    ⋮⋮
+                  </div>
+                  {/* Node content area - actual node will be rendered by WorkflowEditor */}
+                  <div className="node-content-placeholder">
+                    <span className="node-type">{node.type}</span>
+                    <span className="node-id">#{node.id.slice(-4)}</span>
+                  </div>
+                </div>
+                
+                {/* Drop zone at the end */}
+                {index === panelNodes.length - 1 && draggedNodeId && draggedNodeId !== node.id && (
+                  <div
+                    className={`node-drop-zone ${dragOverIndex === index + 1 ? 'drag-over' : ''}`}
+                    onDragOver={(e) => handleNodeDragOver(e, index + 1)}
+                    onDrop={(e) => handleNodeDropOnNode(e, index + 1)}
+                    style={{ height: '4px', margin: '2px 0' }}
+                  />
+                )}
               </div>
             ))}
           

@@ -1090,6 +1090,75 @@ body {
   transform: translateX(2px);
 }
 
+.panel-node.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+/* Node drag handle */
+.node-drag-handle {
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  font-size: 16px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.2s;
+  user-select: none;
+  z-index: 10;
+}
+
+.panel-node:hover .node-drag-handle {
+  opacity: 1;
+}
+
+.node-drag-handle:hover {
+  color: #9ca3af;
+}
+
+.node-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Node content placeholder */
+.node-content-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(55, 65, 81, 0.5);
+  border-radius: 6px;
+  border-left: 3px solid #6b7280;
+  min-height: 36px;
+}
+
+.node-type {
+  color: #d1d5db;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.node-id {
+  color: #9ca3af;
+  font-size: 10px;
+  font-family: monospace;
+}
+
+/* Drop zones */
+.node-drop-zone {
+  background: transparent;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+
+.node-drop-zone.drag-over {
+  background: #3b82f6;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+}
+
 .panel-content {
   padding: 16px;
   height: calc(100% - 40px);
