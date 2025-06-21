@@ -1,9 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import type { WorkflowNode, Connection, Position } from '../types';
+import type { WorkflowNode, Connection, Position, WorkflowPanel } from '../types';
 import NodeComponent from './NodeComponent';
 import ConnectionLine from './ConnectionLine';
 import NodePalette from './NodePalette';
 import PropertiesPanel from './PropertiesPanel';
+import PanelComponent from './PanelComponent';
+import PanelModal from './PanelModal';
 
 interface WorkflowEditorProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
@@ -22,47 +24,113 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 }) => {
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [panels, setPanels] = useState<WorkflowPanel[]>([]);
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
+  const [selectedPanel, setSelectedPanel] = useState<WorkflowPanel | null>(null);
   const [connecting, setConnecting] = useState<{
     nodeId: string;
     outputId: string;
   } | null>(null);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [showPanelModal, setShowPanelModal] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  
+  // Refs to capture current state for callbacks
+  const nodesRef = useRef<WorkflowNode[]>([]);
+  const connectionsRef = useRef<Connection[]>([]);
+  
+  // Initialize with main panel
+  useEffect(() => {
+    if (panels.length === 0) {
+      const mainPanel: WorkflowPanel = {
+        id: 'main-panel',
+        name: 'Main',
+        type: 'main',
+        position: { x: 100, y: 100 },
+        size: { width: 400, height: 300 },
+        color: '#3b82f6',
+        isExpanded: true
+      };
+      setPanels([mainPanel]);
+      setSelectedPanel(mainPanel);
+    }
+  }, [panels.length]);
+  
+  // Update refs when state changes
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+  
+  useEffect(() => {
+    connectionsRef.current = connections;
+  }, [connections]);
 
   const handleNodeSelect = useCallback((node: WorkflowNode) => {
     setSelectedNode(node);
   }, []);
 
   const handleNodeDrag = useCallback((nodeId: string, position: Position) => {
-    setNodes(prev => prev.map(node => 
-      node.id === nodeId ? { ...node, position } : node
-    ));
-  }, []);
+    setNodes(prev => prev.map(node => {
+      if (node.id === nodeId) {
+        const updatedNode = { ...node, position };
+        
+        // Update panel position when nodes move (nodes should move panels)
+        const panel = panels.find(p => p.id === node.panelId);
+        if (panel) {
+          const panelNodes = prev.filter(n => n.panelId === panel.id);
+          if (panelNodes.length === 1) {
+            // If this is the only node, move the panel with it
+            const newPanelPosition = {
+              x: position.x - 16, // Account for panel padding
+              y: position.y - 56  // Account for panel header + padding
+            };
+            setPanels(prevPanels => prevPanels.map(p => 
+              p.id === panel.id ? { ...p, position: newPanelPosition } : p
+            ));
+          }
+        }
+        
+        return updatedNode;
+      }
+      return node;
+    }));
+  }, [panels]);
 
-  const handleAddNode = useCallback((type: string, position: Position) => {
-    // Snap to vertical position if there are existing nodes
-    let snappedPosition = { ...position };
-    if (nodes.length > 0) {
-      const lastNode = nodes[nodes.length - 1];
-      snappedPosition = {
-        x: position.x,
-        y: lastNode.position.y + 80 // 80px spacing between nodes
+  const handleAddNode = useCallback((type: string, position: Position, panelId?: string, insertAfterNodeId?: string) => {
+    const targetPanelId = panelId || selectedPanel?.id || 'main-panel';
+    const targetPanel = panels.find(p => p.id === targetPanelId);
+    
+    // Position is relative to panel if panelId is provided
+    let nodePosition = { ...position };
+    if (panelId && targetPanel) {
+      // Convert relative position to absolute
+      nodePosition = {
+        x: targetPanel.position.x + position.x,
+        y: targetPanel.position.y + 40 + position.y // Add header height
       };
     }
 
     const newNode: WorkflowNode = {
       id: `node_${Date.now()}`,
       type,
-      position: snappedPosition,
+      position: nodePosition,
+      panelId: targetPanelId,
       properties: getDefaultProperties(type),
       inputs: getDefaultInputs(type),
       outputs: getDefaultOutputs(type),
     };
+    
     setNodes(prev => [...prev, newNode]);
-  }, [nodes]);
+    
+    // Expand panel if it was collapsed
+    if (targetPanel && !targetPanel.isExpanded) {
+      setPanels(prevPanels => prevPanels.map(panel => 
+        panel.id === targetPanelId ? { ...panel, isExpanded: true } : panel
+      ));
+    }
+  }, [nodes, selectedPanel, panels]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -122,13 +190,13 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [connecting]);
 
-  const generatePythonCode = useCallback(() => {
-    if (nodes.length === 0) return '';
+  const generatePythonCodeFromNodes = useCallback((nodeList: WorkflowNode[]) => {
+    if (nodeList.length === 0) return '';
     
     let code = '# Generated Python Code\n';
     
     // Sort nodes by their vertical position to maintain execution order
-    const sortedNodes = [...nodes].sort((a, b) => a.position.y - b.position.y);
+    const sortedNodes = [...nodeList].sort((a, b) => a.position.y - b.position.y);
     
     sortedNodes.forEach(node => {
       switch (node.type) {
@@ -177,10 +245,15 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     });
     
     return code;
-  }, [nodes]);
+  }, []);
+
+  const generatePythonCode = useCallback(() => {
+    return generatePythonCodeFromNodes(nodes);
+  }, [nodes, generatePythonCodeFromNodes]);
 
   const executeWorkflow = useCallback(async () => {
-    if (nodes.length === 0) {
+    const currentNodes = nodesRef.current;
+    if (currentNodes.length === 0) {
       onConsoleOutput?.(prev => [...prev, 'Error: No nodes to execute']);
       return;
     }
@@ -189,7 +262,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onConsoleOutput?.(prev => [...prev, '=== Execution Started ===']);
     
     try {
-      const pythonCode = generatePythonCode();
+      // Generate Python code using current nodes
+      const pythonCode = generatePythonCodeFromNodes(currentNodes);
       onConsoleOutput?.(prev => [...prev, 'Generated Python Code:', pythonCode]);
       
       // Simulate execution for demo purposes
@@ -198,13 +272,17 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         const lines = pythonCode.split('\n').filter(line => line.trim() && !line.startsWith('#'));
         const variables: Record<string, string> = {};
         
+        onConsoleOutput?.(prev => [...prev, `Processing ${lines.length} lines of code`]);
+        
         lines.forEach(line => {
           const trimmedLine = line.trim();
           
           // Handle variable assignment
           if (trimmedLine.includes(' = ')) {
             const [varName, value] = trimmedLine.split(' = ');
-            variables[varName.trim()] = value.replace(/"/g, '');
+            const cleanValue = value.replace(/"/g, '');
+            variables[varName.trim()] = cleanValue;
+            onConsoleOutput?.(prev => [...prev, `Variable assigned: ${varName.trim()} = ${cleanValue}`]);
           }
           
           // Handle print statements
@@ -214,7 +292,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               let output = printContent.replace(/"/g, '');
               // Replace variable references
               Object.keys(variables).forEach(varName => {
-                output = output.replace(new RegExp(varName, 'g'), variables[varName]);
+                if (output === varName) {
+                  output = variables[varName];
+                }
               });
               onConsoleOutput?.(prev => [...prev, `> ${output}`]);
             }
@@ -229,16 +309,21 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       onConsoleOutput?.(prev => [...prev, `Error: ${error}`]);
       onExecutionState?.(false);
     }
-  }, [nodes, generatePythonCode, onConsoleOutput, onExecutionState]);
+  }, [onConsoleOutput, onExecutionState]); // Removed dependencies that cause re-creation
 
   const saveWorkflow = useCallback(() => {
+    const currentNodes = nodesRef.current;
+    const currentConnections = connectionsRef.current;
+    
     const workflowData = {
-      nodes,
-      connections,
+      nodes: currentNodes,
+      connections: currentConnections,
+      panels: panels,
       metadata: {
         created: new Date().toISOString(),
         version: '1.0.0',
-        nodeCount: nodes.length
+        nodeCount: currentNodes.length,
+        panelCount: panels.length
       }
     };
     
@@ -254,8 +339,110 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    onConsoleOutput?.(prev => [...prev, `Workflow saved as JSON (${nodes.length} nodes, ${connections.length} connections)`]);
-  }, [nodes, connections, onConsoleOutput]);
+    onConsoleOutput?.(prev => [...prev, `Workflow saved as JSON (${currentNodes.length} nodes, ${currentConnections.length} connections, ${panels.length} panels)`]);
+  }, [onConsoleOutput, panels]); // Stable dependencies only
+
+  // Panel management functions
+  const handleCreatePanel = useCallback((name: string) => {
+    const newPanel: WorkflowPanel = {
+      id: `panel_${Date.now()}`,
+      name,
+      type: 'module',
+      position: { x: 200 + panels.length * 50, y: 150 + panels.length * 50 },
+      size: { width: 400, height: 300 },
+      color: '#8b5cf6',
+      isExpanded: true
+    };
+    setPanels(prev => [...prev, newPanel]);
+    setSelectedPanel(newPanel);
+    setShowPanelModal(false);
+  }, [panels]);
+
+  const handlePanelSelect = useCallback((panel: WorkflowPanel) => {
+    setSelectedPanel(panel);
+    setSelectedNode(null);
+  }, []);
+
+  const handlePanelDrag = useCallback((panelId: string, newPosition: Position) => {
+    const panel = panels.find(p => p.id === panelId);
+    if (panel) {
+      const deltaX = newPosition.x - panel.position.x;
+      const deltaY = newPosition.y - panel.position.y;
+      
+      // Move panel
+      setPanels(prev => prev.map(p => 
+        p.id === panelId ? { ...p, position: newPosition } : p
+      ));
+      
+      // Move all nodes in the panel
+      setNodes(prev => prev.map(node => {
+        if (node.panelId === panelId) {
+          return {
+            ...node,
+            position: {
+              x: node.position.x + deltaX,
+              y: node.position.y + deltaY
+            }
+          };
+        }
+        return node;
+      }));
+    }
+  }, [panels]);
+
+  const handlePanelResize = useCallback((panelId: string, size: { width: number; height: number }) => {
+    setPanels(prev => prev.map(panel => 
+      panel.id === panelId ? { ...panel, size } : panel
+    ));
+  }, []);
+
+  const handleNodeDropInPanel = useCallback((panelId: string, position: Position, blockType: string, insertAfterNodeId?: string) => {
+    handleAddNode(blockType, position, panelId, insertAfterNodeId);
+  }, [handleAddNode]);
+  
+  const handleTogglePanelExpanded = useCallback((panelId: string) => {
+    setPanels(prev => prev.map(panel => 
+      panel.id === panelId ? { ...panel, isExpanded: !panel.isExpanded } : panel
+    ));
+  }, []);
+  
+  const handleNodeDragInPanel = useCallback((nodeId: string, newPosition: Position) => {
+    setNodes(prev => prev.map(node => {
+      if (node.id === nodeId) {
+        const panel = panels.find(p => p.id === node.panelId);
+        if (panel) {
+          // Convert relative position to absolute
+          return {
+            ...node,
+            position: {
+              x: panel.position.x + newPosition.x,
+              y: panel.position.y + 40 + newPosition.y
+            }
+          };
+        }
+      }
+      return node;
+    }));
+  }, [panels]);
+  
+  const handleDeleteSelectedNode = useCallback(() => {
+    if (selectedNode) {
+      setNodes(prev => prev.filter(node => node.id !== selectedNode.id));
+      setSelectedNode(null);
+    }
+  }, [selectedNode]);
+  
+  // Handle keyboard events
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedNode) {
+        handleDeleteSelectedNode();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode, handleDeleteSelectedNode]);
 
   const loadWorkflow = useCallback((jsonData: string) => {
     try {
@@ -263,19 +450,62 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       if (workflowData.nodes && Array.isArray(workflowData.nodes)) {
         setNodes(workflowData.nodes);
         setConnections(workflowData.connections || []);
-        onConsoleOutput?.(prev => [...prev, `Workflow loaded (${workflowData.nodes.length} nodes)`]);
+        setPanels(workflowData.panels || []);
+        onConsoleOutput?.(prev => [...prev, `Workflow loaded (${workflowData.nodes.length} nodes, ${(workflowData.panels || []).length} panels)`]);
       }
     } catch (error) {
       onConsoleOutput?.(prev => [...prev, `Error loading workflow: ${error}`]);
     }
   }, [onConsoleOutput]);
 
-  // Register callbacks with parent
+  const getNodeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      // Original node types
+      bash: '#3b82f6',
+      regex: '#8b5cf6',
+      curl: '#10b981',
+      scp: '#f97316',
+      input: '#6b7280',
+      output: '#6b7280',
+      conditional: '#eab308',
+      loop: '#ef4444',
+      transform: '#6366f1',
+      agent: '#ec4899',
+      // New coding block types
+      variable: '#f97316',
+      assignment: '#eab308',
+      'if-then': '#22c55e',
+      foreach: '#8b5cf6',
+      while: '#ec4899',
+      function: '#3b82f6',
+      execute: '#ef4444',
+      print: '#10b981',
+      // New block types from design
+      find_files: '#3b82f6',
+      read_file: '#3b82f6',
+      write_file: '#3b82f6',
+      copy_file: '#3b82f6',
+      text_transform: '#22c55e',
+      regex_match: '#8b5cf6',
+      http_request: '#10b981',
+      download_file: '#10b981',
+      webhook: '#10b981',
+      ai_text_gen: '#10b981',
+      ai_code_gen: '#10b981',
+      ai_analysis: '#10b981',
+      python_code: '#ef4444',
+      shell_command: '#ef4444',
+      hybrid_template: '#8b5cf6'
+    };
+    return colors[type] || '#6b7280';
+  };
+
+  // Register callbacks with parent (stable callbacks)
   useEffect(() => {
     onRegisterExecute?.(executeWorkflow);
     onRegisterGenerateCode?.(generatePythonCode);
     onRegisterSave?.(saveWorkflow);
-  }, [executeWorkflow, generatePythonCode, saveWorkflow, onRegisterExecute, onRegisterGenerateCode, onRegisterSave]);
+  }, [onRegisterExecute, onRegisterGenerateCode, onRegisterSave]); // Remove callback dependencies to prevent re-registration
 
   const getDefaultInputs = (type: string) => {
     switch (type) {
@@ -327,7 +557,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 
   return (
     <div className="editor-workspace">
-      {/* Left Toolbar - Node Palette */}
+      {/* Block Palette */}
       <NodePalette onAddNode={handleAddNode} />
 
       {/* Canvas Area */}
@@ -335,19 +565,57 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         <div className="canvas-content">
           <div className="grid-background" />
           
-          {/* Nodes */}
-          {nodes.map(node => (
-            <NodeComponent
-              key={node.id}
-              node={node}
-              selected={selectedNode?.id === node.id}
-              onSelect={handleNodeSelect}
-              onDrag={handleNodeDrag}
-              onStartConnection={handleStartConnection}
-              onCompleteConnection={handleCompleteConnection}
-              connecting={connecting}
+          {/* Panels */}
+          {panels.map(panel => (
+            <PanelComponent
+              key={panel.id}
+              panel={panel}
+              nodes={nodes}
+              selected={selectedPanel?.id === panel.id}
+              onSelect={handlePanelSelect}
+              onDrag={handlePanelDrag}
+              onResize={handlePanelResize}
+              onNodeDrop={handleNodeDropInPanel}
+              onToggleExpanded={handleTogglePanelExpanded}
+              onNodeDrag={handleNodeDragInPanel}
             />
           ))}
+
+          {/* Nodes - only render nodes that are in expanded panels or not in any panel */}
+          {nodes
+            .filter(node => {
+              if (!node.panelId) return true; // Orphaned nodes
+              const panel = panels.find(p => p.id === node.panelId);
+              return panel?.isExpanded !== false; // Show if panel is expanded or doesn't exist
+            })
+            .map(node => {
+              const panel = panels.find(p => p.id === node.panelId);
+              let nodePosition = node.position;
+              
+              // If node is in a panel, position it relative to the panel
+              if (panel && panel.isExpanded) {
+                const panelNodes = nodes.filter(n => n.panelId === panel.id);
+                const nodeIndex = panelNodes.findIndex(n => n.id === node.id);
+                nodePosition = {
+                  x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
+                  y: panel.position.y + 56 + (nodeIndex * 52) // header + padding + node spacing
+                };
+              }
+              
+              return (
+                <NodeComponent
+                  key={node.id}
+                  node={{ ...node, position: nodePosition }}
+                  selected={selectedNode?.id === node.id}
+                  onSelect={handleNodeSelect}
+                  onDrag={handleNodeDrag}
+                  onStartConnection={handleStartConnection}
+                  onCompleteConnection={handleCompleteConnection}
+                  connecting={connecting}
+                  connections={connections}
+                />
+              );
+            })}
 
           {/* Auto-generated connections between vertically stacked nodes */}
           <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
@@ -355,24 +623,32 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               if (index === 0) return null; // Skip first node
               const prevNode = nodes[index - 1];
               
-              // Connect from output dot of previous node to input dot of current node
-              const startX = prevNode.position.x - 4; // Connection bar position
-              const startY = prevNode.position.y + 55; // Near bottom of previous node (output dot)
-              const endX = node.position.x - 4; // Connection bar position
-              const endY = node.position.y + 15; // Near top of current node (input dot)
+              // Connect from output connector (bottom triangle) to input connector (top triangle)
+              const startX = prevNode.position.x + 110; // Center of node (220px / 2)
+              const startY = prevNode.position.y + 120; // Bottom of previous node (output connector)
+              const endX = node.position.x + 110; // Center of current node
+              const endY = node.position.y - 8; // Top of current node (input connector)
+              
+              // Create smooth curve
+              const midY = startY + (endY - startY) / 2;
               
               return (
                 <g key={`auto-connection-${index}`}>
                   <path
-                    d={`M ${startX} ${startY} L ${startX} ${startY + 10} L ${endX} ${endY - 10} L ${endX} ${endY}`}
+                    d={`M ${startX} ${startY} Q ${startX} ${midY} ${endX} ${endY}`}
                     stroke="#10b981"
-                    strokeWidth="2"
+                    strokeWidth="3"
                     fill="none"
                     strokeDasharray="none"
                   />
-                  {/* Connection indicator dots */}
-                  <circle cx={startX} cy={startY} r="3" fill="#10b981" />
-                  <circle cx={endX} cy={endY} r="3" fill="#3b82f6" />
+                  {/* Connection glow effect */}
+                  <path
+                    d={`M ${startX} ${startY} Q ${startX} ${midY} ${endX} ${endY}`}
+                    stroke="#10b981"
+                    strokeWidth="6"
+                    fill="none"
+                    opacity="0.3"
+                  />
                 </g>
               );
             })}
@@ -484,15 +760,58 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           <div className="canvas-info-title">Workflow Editor</div>
           <div className="canvas-info-subtitle">Drag nodes to connect</div>
         </div>
+
+        {/* Minimap */}
+        <div className="minimap">
+          <div className="minimap-header">Minimap</div>
+          <div className="minimap-content">
+            <svg width="120" height="80" viewBox="0 0 1600 1200" className="minimap-svg">
+              <rect width="1600" height="1200" fill="#111827" />
+              {nodes.map(node => (
+                <rect
+                  key={`minimap-${node.id}`}
+                  x={node.position.x / 8}
+                  y={node.position.y / 8}
+                  width="22.5"
+                  height="10"
+                  fill={getNodeColor(node.type)}
+                  opacity="0.8"
+                />
+              ))}
+            </svg>
+          </div>
+        </div>
+        
+        {/* Canvas Controls */}
+        <div className="canvas-controls">
+          <button 
+            className="canvas-control-button primary"
+            onClick={() => setShowPanelModal(true)}
+          >
+            + Add Module
+          </button>
+        </div>
       </div>
+
+      {/* Panel Modal */}
+      <PanelModal
+        isOpen={showPanelModal}
+        onCreatePanel={handleCreatePanel}
+        onClose={() => setShowPanelModal(false)}
+      />
 
       {/* Right Panel - Properties */}
       <PropertiesPanel 
         selectedNode={selectedNode}
+        selectedPanel={selectedPanel}
+        nodes={nodes}
+        panels={panels}
         onUpdateNode={(node) => {
           setNodes(prev => prev.map(n => n.id === node.id ? node : n));
           setSelectedNode(node);
         }}
+        onNodeSelect={handleNodeSelect}
+        onPanelSelect={handlePanelSelect}
       />
     </div>
   );

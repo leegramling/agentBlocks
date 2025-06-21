@@ -1,12 +1,26 @@
 import React from 'react';
-import type { WorkflowNode } from '../types';
+import type { WorkflowNode, WorkflowPanel } from '../types';
+import TreeView from './TreeView';
 
 interface PropertiesPanelProps {
   selectedNode: WorkflowNode | null;
+  selectedPanel?: WorkflowPanel | null;
+  nodes: WorkflowNode[];
+  panels: WorkflowPanel[];
   onUpdateNode: (node: WorkflowNode) => void;
+  onNodeSelect: (node: WorkflowNode) => void;
+  onPanelSelect: (panel: WorkflowPanel) => void;
 }
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ 
+  selectedNode, 
+  selectedPanel,
+  nodes,
+  panels,
+  onUpdateNode,
+  onNodeSelect,
+  onPanelSelect 
+}) => {
   const handlePropertyChange = (key: string, value: any) => {
     if (!selectedNode) return;
     
@@ -271,14 +285,23 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                   cursor: 'pointer',
                   transition: 'all 0.2s'
                 }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#b91c1c'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#dc2626'}
+                onMouseOver={(e) => (e.target as HTMLElement).style.backgroundColor = '#b91c1c'}
+                onMouseOut={(e) => (e.target as HTMLElement).style.backgroundColor = '#dc2626'}
               >
                 Delete Node
               </button>
             </div>
           </div>
         </div>
+
+        {/* Tree View */}
+        <TreeView
+          nodes={nodes}
+          panels={panels}
+          selectedNodeId={selectedNode?.id}
+          onNodeSelect={onNodeSelect}
+          onPanelSelect={onPanelSelect}
+        />
       </div>
     </div>
   );

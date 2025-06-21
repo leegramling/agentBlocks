@@ -24,6 +24,10 @@ export interface WorkflowNode {
   inputs: NodeInput[];
   outputs: NodeOutput[];
   data?: any;
+  panelId?: string; // Which panel this node belongs to
+  parentId?: string; // Parent node for nesting (foreach, if, function)
+  children?: string[]; // Child node IDs for parent nodes
+  indentLevel?: number; // Visual indentation level
 }
 
 export interface Connection {
@@ -34,12 +38,23 @@ export interface Connection {
   target_input: string;
 }
 
+export interface WorkflowPanel {
+  id: string;
+  name: string;
+  type: 'main' | 'module';
+  position: Position;
+  size: { width: number; height: number };
+  color?: string;
+  isExpanded?: boolean;
+}
+
 export interface Workflow {
   id: string;
   name: string;
   description: string;
   nodes: WorkflowNode[];
   connections: Connection[];
+  panels: WorkflowPanel[];
   created_at: string;
   updated_at: string;
 }
