@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import type { WorkflowNode, Position } from '../types';
+import type { WorkflowNode, Position, Connection } from '../types';
 
 interface NodeComponentProps {
   node: WorkflowNode;
@@ -9,6 +9,7 @@ interface NodeComponentProps {
   onStartConnection: (nodeId: string, outputId: string) => void;
   onCompleteConnection: (nodeId: string, inputId: string) => void;
   connecting: { nodeId: string; outputId: string } | null;
+  connections: Connection[];
 }
 
 const NodeComponent: React.FC<NodeComponentProps> = ({
@@ -18,7 +19,8 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
   onDrag,
   onStartConnection,
   onCompleteConnection,
-  connecting
+  connecting,
+  connections
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
@@ -86,6 +88,7 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
     setIsDragging(true);
     onSelect(node);
     
+    // Calculate drag offset relative to where the mouse clicked within the node
     const rect = nodeRef.current?.getBoundingClientRect();
     if (rect) {
       setDragOffset({
@@ -97,15 +100,39 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
 
   const handleMouseMove = (e: MouseEvent) => {
     if (isDragging) {
-      const newPosition = {
-        x: e.clientX - dragOffset.x,
-        y: e.clientY - dragOffset.y
-      };
-      onDrag(node.id, newPosition);
+      // Get the canvas container to calculate position relative to it
+      const canvasElement = document.querySelector('.canvas-content');
+      if (canvasElement) {
+        const canvasRect = canvasElement.getBoundingClientRect();
+        const newPosition = {
+          x: e.clientX - canvasRect.left - dragOffset.x,
+          y: e.clientY - canvasRect.top - dragOffset.y
+        };
+        onDrag(node.id, newPosition);
+      }
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: MouseEvent) => {
+    if (isDragging) {
+      // Check if we're dropping on top of another node for auto-connection
+      const elementsUnderMouse = document.elementsFromPoint(e.clientX, e.clientY);
+      const targetNodeElement = elementsUnderMouse.find(el => 
+        el.classList.contains('workflow-node') && 
+        el.getAttribute('data-type') !== node.type
+      );
+      
+      if (targetNodeElement) {
+        const targetNodeId = targetNodeElement.closest('[data-node-id]')?.getAttribute('data-node-id');
+        if (targetNodeId && targetNodeId !== node.id) {
+          // Auto-connect: current node output to target node input
+          if (hasOutput()) {
+            onStartConnection(node.id, 'output');
+            setTimeout(() => onCompleteConnection(targetNodeId, 'input'), 50);
+          }
+        }
+      }
+    }
     setIsDragging(false);
   };
 
@@ -159,118 +186,175 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
     return ['variable', 'assignment', 'if-then', 'foreach', 'while', 'function'].includes(node.type);
   };
 
+  const getNodeColorVariant = (type: string) => {
+    const baseColor = getNodeColor(type);
+    // Create a slightly darker variant for gradient
+    const variants: Record<string, string> = {
+      '#3b82f6': '#1d4ed8', // blue
+      '#8b5cf6': '#7c3aed', // purple  
+      '#10b981': '#047857', // green
+      '#f97316': '#ea580c', // orange
+      '#6b7280': '#4b5563', // gray
+      '#eab308': '#ca8a04', // yellow
+      '#ef4444': '#dc2626', // red
+      '#22c55e': '#16a34a', // green
+      '#ec4899': '#db2777', // pink
+      '#6366f1': '#4f46e5', // indigo
+    };
+    return variants[baseColor] || baseColor;
+  };
+
+  const getNodeBlockMode = (type: string): string => {
+    const blockModes: Record<string, string> = {
+      // Visual blocks
+      variable: 'Visual',
+      print: 'Visual',
+      assignment: 'Visual',
+      'if-then': 'Visual',
+      foreach: 'Visual',
+      while: 'Visual',
+      function: 'Visual',
+      find_files: 'Visual',
+      read_file: 'Visual',
+      write_file: 'Visual',
+      copy_file: 'Visual',
+      text_transform: 'Visual',
+      regex_match: 'Visual',
+      http_request: 'Visual',
+      download_file: 'Visual',
+      webhook: 'Visual',
+      // AI blocks
+      ai_text_gen: 'AI',
+      ai_code_gen: 'AI',
+      ai_analysis: 'AI',
+      // Code blocks
+      python_code: 'Code',
+      shell_command: 'Code',
+      execute: 'Code',
+      // Hybrid blocks
+      hybrid_template: 'Hybrid',
+    };
+    return blockModes[type] || 'Visual';
+  };
+
+  const getBlockModeColor = (mode: string) => {
+    switch (mode) {
+      case 'Visual': return '#3b82f6';
+      case 'Code': return '#ef4444';
+      case 'Hybrid': return '#8b5cf6';
+      case 'AI': return '#10b981';
+      default: return '#6b7280';
+    }
+  };
+
+  const getBlockModeIcon = (mode: string) => {
+    switch (mode) {
+      case 'Visual': return '👁️';
+      case 'Code': return '💻';
+      case 'Hybrid': return '🔗';
+      case 'AI': return '🤖';
+      default: return '⚙️';
+    }
+  };
+
+  const getNodePropertiesSummary = () => {
+    switch (node.type) {
+      case 'variable':
+        return `${node.properties.name || 'myVariable'}: "${node.properties.value || 'hello world'}"`;
+      case 'print':
+        return `Print: ${node.properties.message || 'myVariable'}`;
+      case 'assignment':
+        return `${node.properties.variable || 'result'} = ${node.properties.expression || 'value'}`;
+      case 'if-then':
+        return `If: ${node.properties.condition || 'True'}`;
+      case 'foreach':
+        return `For ${node.properties.variable || 'item'} in ${node.properties.iterable || 'items'}`;
+      case 'while':
+        return `While: ${node.properties.condition || 'True'}`;
+      case 'function':
+        return `${node.properties.name || 'myFunction'}(${node.properties.parameters || ''})`;
+      default:
+        return 'Configure properties...';
+    }
+  };
+
+  const isInputConnected = () => {
+    return connections.some(conn => conn.target_node === node.id);
+  };
+
+  const isOutputConnected = () => {
+    return connections.some(conn => conn.source_node === node.id);
+  };
+
   return (
     <div
       ref={nodeRef}
+      data-node-id={node.id}
       style={{
         position: 'absolute',
         left: node.position.x,
         top: node.position.y,
-        minWidth: '180px',
         userSelect: 'none',
         cursor: 'move',
-        outline: selected ? '2px solid #60a5fa' : 'none',
-        borderRadius: '8px'
+        outline: selected ? '2px solid #60a5fa' : 'none'
       }}
       onMouseDown={handleMouseDown}
     >
-      {/* Connection Bar */}
-      <div 
-        style={{
-          position: 'absolute',
-          left: '-8px',
-          top: '0',
-          bottom: '0',
-          width: '4px',
-          backgroundColor: '#374151',
-          borderRadius: '2px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '8px 0'
-        }}
-      >
-        {/* Input Dot (Blue) */}
-        {hasInput() && (
-          <div 
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: '#3b82f6',
-              border: '1px solid #1e40af',
-              marginTop: '4px'
-            }}
-          />
-        )}
-        
-        {/* Output Dot (Green) */}
-        {hasOutput() && (
-          <div 
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: '#10b981',
-              border: '1px solid #047857',
-              marginBottom: '4px'
-            }}
-          />
-        )}
-      </div>
-      <div 
-        style={{
-          borderRadius: '8px',
-          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
-          border: `2px solid ${selected ? '#60a5fa' : '#4b5563'}`,
-          backgroundColor: '#1f2937',
-          overflow: 'hidden'
-        }}
-      >
-        {/* Node Header */}
+      {/* Input Connector (Top) - Female (Down Triangle) */}
+      {hasInput() && (
         <div 
+          className="node-connector input-connector"
           style={{
-            backgroundColor: getNodeColor(node.type),
-            padding: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            color: isInputConnected() ? '#10b981' : '#eab308'
           }}
+          title="Input connector"
         >
-          <span style={{fontSize: '18px'}}>{getNodeIcon(node.type)}</span>
-          <div style={{flex: 1}}>
-            <div style={{
-              fontWeight: '600',
-              color: '#ffffff',
-              fontSize: '14px'
-            }}>
-              {node.type.charAt(0).toUpperCase() + node.type.slice(1)}
+          ▼
+        </div>
+      )}
+
+      <div 
+        className={`workflow-node ${selected ? 'selected' : ''}`}
+        data-type={node.type}
+      >
+        {/* Node Icon with Background Color */}
+        <div className="node-icon" style={{ background: getNodeColor(node.type) }}>
+          {getNodeIcon(node.type)}
+        </div>
+
+        {/* Node Content */}
+        <div className="node-header">
+          <div className="node-title-section">
+            <div className="node-title">
+              {node.type.charAt(0).toUpperCase() + node.type.slice(1).replace('_', ' ')}
             </div>
-            <div style={{
-              fontSize: '11px',
-              color: 'rgba(255, 255, 255, 0.7)'
-            }}>
-              ID: {node.id.split('_')[1]}
+            <div className="node-subtitle">
+              {getNodePropertiesSummary()}
             </div>
           </div>
         </div>
 
-        {/* Node Body */}
-        <div style={{padding: '12px'}}>
-          {getNodeProperties()}
-          
-          {/* Simplified display - no complex inputs/outputs for coding blocks */}
-          <div style={{
-            marginTop: '8px',
-            fontSize: '11px',
-            color: '#9ca3af',
-            textAlign: 'center'
-          }}>
-            Double-click to edit • Click to select
-          </div>
+        {/* Mode Badge */}
+        <div className="node-mode-badge">
+          {getNodeBlockMode(node.type).toUpperCase()}
         </div>
+
+        {/* Execution Status */}
+        <div className="execution-status"></div>
       </div>
+
+      {/* Output Connector (Bottom) - Male (Up Triangle) */}
+      {hasOutput() && (
+        <div 
+          className="node-connector output-connector"
+          style={{
+            color: isOutputConnected() ? '#10b981' : '#eab308'
+          }}
+          title="Output connector"
+        >
+          ▲
+        </div>
+      )}
     </div>
   );
 };

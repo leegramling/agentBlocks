@@ -30,6 +30,7 @@ const Layout: React.FC<LayoutProps> = ({
             <button className="nav-button">File</button>
             <button className="nav-button">Edit</button>
             <button className="nav-button">View</button>
+            <button className="nav-button">Workflow</button>
             <button className="nav-button">Tools</button>
             <button className="nav-button">Help</button>
           </nav>
@@ -47,19 +48,51 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <div className="main-content">
         {children}
-        
-        {/* Console Panel */}
-        <Console 
-          output={consoleOutput}
-          isExecuting={isExecuting}
-          onExecute={onExecute || (() => {})}
-          onClear={onClearConsole || (() => {})}
-          onGenerateCode={onGenerateCode}
-        />
       </div>
+
+      {/* Execution Controls */}
+      <div className="execution-controls">
+        <button 
+          className={`control-button ${isExecuting ? 'disabled' : ''}`}
+          onClick={onExecute}
+          disabled={isExecuting}
+          title="Run Workflow"
+        >
+          ▶ Run
+        </button>
+        <button className="control-button" title="Pause Execution">
+          ⏸ Pause
+        </button>
+        <button className="control-button" title="Stop Execution">
+          ⏹ Stop
+        </button>
+        <button className="control-button" title="Settings">
+          🔧
+        </button>
+      </div>
+
+      {/* Status Bar */}
+      <div className="status-bar">
+        <span className="status-item">Ready</span>
+        <span className="status-separator">|</span>
+        <span className="status-item">0 blocks</span>
+        <span className="status-separator">|</span>
+        <span className="status-item">Last saved: Never</span>
+        <span className="status-separator">|</span>
+        <span className="status-item">Python 3.11</span>
+      </div>
+
+      {/* Console Panel */}
+      <Console 
+        output={consoleOutput}
+        isExecuting={isExecuting}
+        onExecute={onExecute || (() => {})}
+        onClear={onClearConsole || (() => {})}
+        onGenerateCode={onGenerateCode}
+      />
     </div>
   );
 };
