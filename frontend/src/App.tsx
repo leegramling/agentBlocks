@@ -11,6 +11,7 @@ function App() {
   // These will be passed to and managed by WorkflowEditor
   const [executeCallback, setExecuteCallback] = useState<(() => void) | null>(null);
   const [generateCodeCallback, setGenerateCodeCallback] = useState<(() => string) | null>(null);
+  const [saveCallback, setSaveCallback] = useState<(() => void) | null>(null);
 
   const handleConsoleOutput = useCallback((updater: (prev: string[]) => string[]) => {
     setConsoleOutput(updater);
@@ -33,6 +34,12 @@ function App() {
     return '';
   }, [generateCodeCallback]);
 
+  const handleSave = useCallback(() => {
+    if (saveCallback) {
+      saveCallback();
+    }
+  }, [saveCallback]);
+
   return (
     <div className="app-container">
       <Router>
@@ -42,6 +49,7 @@ function App() {
           onExecute={handleExecute}
           onClearConsole={handleClearConsole}
           onGenerateCode={handleGenerateCode}
+          onSave={handleSave}
         >
           <Routes>
             <Route 
@@ -52,6 +60,7 @@ function App() {
                   onExecutionState={setIsExecuting}
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
+                  onRegisterSave={setSaveCallback}
                 />
               } 
             />
@@ -63,6 +72,7 @@ function App() {
                   onExecutionState={setIsExecuting}
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
+                  onRegisterSave={setSaveCallback}
                 />
               } 
             />

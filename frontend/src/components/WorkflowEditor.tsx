@@ -10,13 +10,15 @@ interface WorkflowEditorProps {
   onExecutionState?: (isExecuting: boolean) => void;
   onRegisterExecute?: (callback: () => void) => void;
   onRegisterGenerateCode?: (callback: () => string) => void;
+  onRegisterSave?: (callback: () => void) => void;
 }
 
 const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   onConsoleOutput,
   onExecutionState,
   onRegisterExecute,
-  onRegisterGenerateCode
+  onRegisterGenerateCode,
+  onRegisterSave
 }) => {
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -229,11 +231,51 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [nodes, generatePythonCode, onConsoleOutput, onExecutionState]);
 
+  const saveWorkflow = useCallback(() => {
+    const workflowData = {
+      nodes,
+      connections,
+      metadata: {
+        created: new Date().toISOString(),
+        version: '1.0.0',
+        nodeCount: nodes.length
+      }
+    };
+    
+    const jsonString = JSON.stringify(workflowData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `workflow_${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    onConsoleOutput?.(prev => [...prev, `Workflow saved as JSON (${nodes.length} nodes, ${connections.length} connections)`]);
+  }, [nodes, connections, onConsoleOutput]);
+
+  const loadWorkflow = useCallback((jsonData: string) => {
+    try {
+      const workflowData = JSON.parse(jsonData);
+      if (workflowData.nodes && Array.isArray(workflowData.nodes)) {
+        setNodes(workflowData.nodes);
+        setConnections(workflowData.connections || []);
+        onConsoleOutput?.(prev => [...prev, `Workflow loaded (${workflowData.nodes.length} nodes)`]);
+      }
+    } catch (error) {
+      onConsoleOutput?.(prev => [...prev, `Error loading workflow: ${error}`]);
+    }
+  }, [onConsoleOutput]);
+
   // Register callbacks with parent
   useEffect(() => {
     onRegisterExecute?.(executeWorkflow);
     onRegisterGenerateCode?.(generatePythonCode);
-  }, [executeWorkflow, generatePythonCode, onRegisterExecute, onRegisterGenerateCode]);
+    onRegisterSave?.(saveWorkflow);
+  }, [executeWorkflow, generatePythonCode, saveWorkflow, onRegisterExecute, onRegisterGenerateCode, onRegisterSave]);
 
   const getDefaultInputs = (type: string) => {
     switch (type) {
@@ -312,20 +354,79 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             {nodes.map((node, index) => {
               if (index === 0) return null; // Skip first node
               const prevNode = nodes[index - 1];
-              const startX = prevNode.position.x + 90; // Center of node width
-              const startY = prevNode.position.y + 60; // Bottom of node
-              const endX = node.position.x + 90;
-              const endY = node.position.y; // Top of node
+              
+              // Connect from output dot of previous node to input dot of current node
+              const startX = prevNode.position.x - 4; // Connection bar position
+              const startY = prevNode.position.y + 55; // Near bottom of previous node (output dot)
+              const endX = node.position.x - 4; // Connection bar position
+              const endY = node.position.y + 15; // Near top of current node (input dot)
               
               return (
-                <path
-                  key={`auto-connection-${index}`}
-                  d={`M ${startX} ${startY} L ${endX} ${endY}`}
-                  stroke="#10b981"
-                  strokeWidth="3"
-                  fill="none"
-                  markerEnd="url(#arrowhead)"
-                />
+                <g key={`auto-connection-${index}`}>
+                  <path
+                    d={`M ${startX} ${startY} L ${startX} ${startY + 10} L ${endX} ${endY - 10} L ${endX} ${endY}`}
+                    stroke="#10b981"
+                    strokeWidth="2"
+                    fill="none"
+                    strokeDasharray="none"
+                  />
+                  {/* Connection indicator dots */}
+                  <circle cx={startX} cy={startY} r="3" fill="#10b981" />
+                  <circle cx={endX} cy={endY} r="3" fill="#3b82f6" />
+                </g>
+              );
+            })}
+            
+            {/* Foreach loop scope visualization */}
+            {nodes.map((node, index) => {
+              if (node.type !== 'foreach') return null;
+              
+              // Find nodes that are part of this loop (next few nodes until another control structure)
+              const loopNodes = [];
+              for (let i = index + 1; i < nodes.length; i++) {
+                const nextNode = nodes[i];
+                if (['foreach', 'while', 'if-then', 'function'].includes(nextNode.type)) {
+                  break; // Stop at next control structure
+                }
+                loopNodes.push(nextNode);
+              }
+              
+              if (loopNodes.length === 0) return null;
+              
+              const firstLoopNode = loopNodes[0];
+              const lastLoopNode = loopNodes[loopNodes.length - 1];
+              const scopeStartY = node.position.y + 60;
+              const scopeEndY = lastLoopNode.position.y + 60;
+              const scopeX = node.position.x - 16;
+              
+              return (
+                <g key={`foreach-scope-${index}`}>
+                  {/* Vertical line showing loop scope */}
+                  <line
+                    x1={scopeX}
+                    y1={scopeStartY}
+                    x2={scopeX}
+                    y2={scopeEndY}
+                    stroke="#8b5cf6"
+                    strokeWidth="3"
+                    strokeDasharray="4,2"
+                  />
+                  {/* Loop indicators */}
+                  <circle cx={scopeX} cy={scopeStartY} r="4" fill="#8b5cf6" />
+                  <circle cx={scopeX} cy={scopeEndY} r="4" fill="#8b5cf6" />
+                  {/* Loop label */}
+                  <text
+                    x={scopeX - 20}
+                    y={scopeStartY + (scopeEndY - scopeStartY) / 2}
+                    fill="#8b5cf6"
+                    fontSize="10"
+                    fontWeight="600"
+                    textAnchor="middle"
+                    transform={`rotate(-90, ${scopeX - 20}, ${scopeStartY + (scopeEndY - scopeStartY) / 2})`}
+                  >
+                    LOOP
+                  </text>
+                </g>
               );
             })}
             

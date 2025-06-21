@@ -149,6 +149,16 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
     }
   };
 
+  const hasInput = () => {
+    // Nodes that can receive input from previous nodes
+    return ['print', 'assignment', 'if-then', 'foreach', 'while', 'execute'].includes(node.type);
+  };
+
+  const hasOutput = () => {
+    // Nodes that can send output to next nodes
+    return ['variable', 'assignment', 'if-then', 'foreach', 'while', 'function'].includes(node.type);
+  };
+
   return (
     <div
       ref={nodeRef}
@@ -164,6 +174,51 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       }}
       onMouseDown={handleMouseDown}
     >
+      {/* Connection Bar */}
+      <div 
+        style={{
+          position: 'absolute',
+          left: '-8px',
+          top: '0',
+          bottom: '0',
+          width: '4px',
+          backgroundColor: '#374151',
+          borderRadius: '2px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '8px 0'
+        }}
+      >
+        {/* Input Dot (Blue) */}
+        {hasInput() && (
+          <div 
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#3b82f6',
+              border: '1px solid #1e40af',
+              marginTop: '4px'
+            }}
+          />
+        )}
+        
+        {/* Output Dot (Green) */}
+        {hasOutput() && (
+          <div 
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              border: '1px solid #047857',
+              marginBottom: '4px'
+            }}
+          />
+        )}
+      </div>
       <div 
         style={{
           borderRadius: '8px',

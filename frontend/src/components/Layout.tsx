@@ -8,6 +8,7 @@ interface LayoutProps {
   onExecute?: () => void;
   onClearConsole?: () => void;
   onGenerateCode?: () => string;
+  onSave?: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -16,7 +17,8 @@ const Layout: React.FC<LayoutProps> = ({
   isExecuting = false, 
   onExecute, 
   onClearConsole,
-  onGenerateCode 
+  onGenerateCode,
+  onSave 
 }) => {
   return (
     <div className="layout">
@@ -33,7 +35,7 @@ const Layout: React.FC<LayoutProps> = ({
           </nav>
         </div>
         <div className="menu-right">
-          <button className="action-button btn-save">Save</button>
+          <button className="action-button btn-save" onClick={onSave}>Save</button>
           <button 
             className="action-button btn-execute"
             onClick={onExecute}
