@@ -21,10 +21,15 @@ const Console: React.FC<ConsoleProps> = ({
   const [generatedCode, setGeneratedCode] = useState('');
 
   const handleShowCode = () => {
+    console.log('handleShowCode called, onGenerateCode available:', !!onGenerateCode);
     if (onGenerateCode) {
       const code = onGenerateCode();
+      console.log('Generated code length:', code?.length || 0);
+      console.log('Generated code:', code);
       setGeneratedCode(code);
       setIsCodeModalOpen(true);
+    } else {
+      console.error('onGenerateCode callback not available!');
     }
   };
 

@@ -951,26 +951,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             />
           ))}
 
-          {/* Canvas Tooltip */}
-          {nodes.length === 0 && (
-            <div 
-              className="absolute"
-              style={{
-                top: '20px',
-                left: '20px',
-                backgroundColor: 'rgba(31, 41, 55, 0.9)',
-                border: '1px solid #374151',
-                borderRadius: '8px',
-                padding: '12px 16px',
-                color: '#d1d5db',
-                fontSize: '14px',
-                maxWidth: '300px',
-                zIndex: 10
-              }}
-            >
-              💡 <strong>Tip:</strong> Drag coding blocks from the left panel to start creating your workflow. Try adding a Variable block followed by a Print block!
-            </div>
-          )}
         </div>
         
         {/* Canvas Info */}
@@ -1009,6 +989,36 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             + Add Module
           </button>
         </div>
+
+        {/* Node Action Controls */}
+        {selectedNode && (
+          <div className="node-action-controls">
+            <button 
+              className="node-action-button"
+              onClick={() => window.open(`/block-editor/${selectedNode.id}`, '_blank')}
+              title="Edit Blocks"
+            >
+              ✏️
+            </button>
+            <button 
+              className="node-action-button"
+              onClick={() => {
+                // Duplicate node logic would go here
+                console.log('Duplicate node:', selectedNode.id);
+              }}
+              title="Duplicate Node"
+            >
+              📋
+            </button>
+            <button 
+              className="node-action-button delete"
+              onClick={handleDeleteSelectedNode}
+              title="Delete Node"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Panel Modal */}

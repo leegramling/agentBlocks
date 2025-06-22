@@ -631,14 +631,14 @@ body {
 }
 
 .category-list {
-  padding: 12px 0;
+  padding: 6px 0;
   border-bottom: 1px solid #374151;
 }
 
 .category-title {
-  font-size: 11px;
+  font-size: 10px;
   color: #9ca3af;
-  padding: 0 12px 8px;
+  padding: 0 8px 4px;
   font-weight: 600;
 }
 
@@ -647,13 +647,13 @@ body {
   background: none;
   border: none;
   color: #9ca3af;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 4px 8px;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   text-align: left;
 }
 
@@ -1208,6 +1208,33 @@ body {
   color: #ffffff;
 }
 
+.query-mode-toggle {
+  display: flex;
+  background-color: #374151;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mode-toggle-button {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-toggle-button.active {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+.mode-toggle-button:hover:not(.active) {
+  background-color: #4b5563;
+  color: #d1d5db;
+}
+
 .llm-icon {
   font-size: 16px;
 }
@@ -1628,7 +1655,7 @@ body {
 }
 
 .tree-view-content {
-  max-height: 300px;
+  max-height: 500px;
   overflow-y: auto;
 }
 
@@ -1740,6 +1767,44 @@ body {
   display: flex;
   gap: 8px;
   z-index: 10;
+}
+
+/* Node Action Controls */
+.node-action-controls {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.node-action-button {
+  background: rgba(31, 41, 55, 0.9);
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 8px;
+  color: #d1d5db;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.node-action-button:hover {
+  background: #374151;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.node-action-button.delete:hover {
+  background: #dc2626;
+  border-color: #dc2626;
 }
 
 .canvas-control-button {

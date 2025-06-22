@@ -249,41 +249,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             )}
           </div>
 
-          {/* Actions */}
-          <div style={{borderTop: '1px solid #374151', paddingTop: '16px', marginTop: '16px'}}>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
-              <button
-                onClick={() => window.open(`/block-editor/${selectedNode.id}`, '_blank')}
-                className="action-button btn-save"
-                style={{width: '100%', fontSize: '12px', padding: '8px 12px'}}
-              >
-                Edit Blocks
-              </button>
-              <button 
-                className="action-button btn-export"
-                style={{width: '100%', fontSize: '12px', padding: '8px 12px'}}
-              >
-                Duplicate Node
-              </button>
-              <button 
-                style={{
-                  width: '100%', 
-                  fontSize: '12px', 
-                  padding: '8px 12px',
-                  backgroundColor: '#dc2626',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseOver={(e) => (e.target as HTMLElement).style.backgroundColor = '#b91c1c'}
-                onMouseOut={(e) => (e.target as HTMLElement).style.backgroundColor = '#dc2626'}
-              >
-                Delete Node
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Tree View */}

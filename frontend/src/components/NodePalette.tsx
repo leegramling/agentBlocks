@@ -36,13 +36,21 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
     setSearchTerm('');
   };
 
-  // Global Tab key listener
+  // Global Tab key listener for cycling focus
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        searchInputRef.current?.focus();
-        setSelectedIndex(-1);
+        
+        // If search field is focused, blur it (return to canvas)
+        if (document.activeElement === searchInputRef.current) {
+          searchInputRef.current?.blur();
+          setSelectedIndex(-1);
+        } else {
+          // If not focused on search, focus it
+          searchInputRef.current?.focus();
+          setSelectedIndex(-1);
+        }
       }
     };
 
@@ -77,11 +85,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
         break;
     }
   };
-
-  // Reset selection when search term changes
-  useEffect(() => {
-    setSelectedIndex(-1);
-  }, [searchTerm, activeCategory, activeMode]);
 
   const blockDefinitions: BlockDefinition[] = [
     // Files Category
@@ -151,6 +154,15 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
       true;
     return matchesCategory && matchesSearch && matchesMode;
   });
+
+  // Auto-select first item when search changes and there are results
+  useEffect(() => {
+    if (searchTerm && filteredBlocks.length > 0) {
+      setSelectedIndex(0);
+    } else {
+      setSelectedIndex(-1);
+    }
+  }, [searchTerm, activeCategory, activeMode, filteredBlocks.length]);
 
   const getBlockModeColor = (mode: string) => {
     switch (mode) {

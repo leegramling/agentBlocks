@@ -12,6 +12,7 @@ const LLMQueryPanel: React.FC<LLMQueryPanelProps> = ({ onConsoleOutput, onImport
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [lastGeneratedWorkflow, setLastGeneratedWorkflow] = useState<any>(null);
+  const [queryMode, setQueryMode] = useState<'nodes' | 'general'>('nodes');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Check Ollama status on component mount
@@ -47,8 +48,9 @@ const LLMQueryPanel: React.FC<LLMQueryPanelProps> = ({ onConsoleOutput, onImport
     onConsoleOutput?.(prev => [...prev, `🤖 Query: ${query}`]);
 
     try {
-      // Create system prompt for visual programming assistance
-      const systemPrompt = `You are a visual programming assistant for AgentBlocks, a node-based workflow editor.
+      // Create system prompt based on query mode
+      const systemPrompt = queryMode === 'nodes' 
+        ? `You are a visual programming assistant for AgentBlocks, a node-based workflow editor.
 
 WORKFLOW JSON FORMAT: For workflow creation requests, output pure JSON with these exact keys:
 {
@@ -81,6 +83,14 @@ AVAILABLE NODE TYPES:
 • text_transform - Modify text content
 • regex_match - Pattern matching with regex
 
+📊 DATA:
+• list_create - Create lists (properties: name, items)
+• list_append - Add to lists (properties: list, item)
+• list_get - Get from lists (properties: list, index, variable)
+• list_comprehension - List comprehensions (properties: variable, expression, iterable, condition)
+• set_create - Create sets (properties: name, items)
+• dict_create - Create dictionaries (properties: name, items)
+
 🌐 NETWORK:
 • http_request - Make web API calls
 • download_file - Download files from URLs
@@ -105,7 +115,17 @@ EXAMPLES:
 User: "Create a workflow with a variable and print"
 Response: {"nodes":[{"id":"var1","type":"variable","properties":{"name":"myVar","value":"hello"}},{"id":"print1","type":"print","properties":{"message":"myVar"}}],"connections":[{"from":"var1","to":"print1"}]}
 
-For non-workflow questions, provide helpful programming guidance.`;
+For non-workflow questions, provide helpful programming guidance.`
+        : `You are a helpful coding assistant. Provide clear, concise programming advice and code examples. Focus on:
+
+• Python programming concepts and best practices
+• Code optimization and debugging
+• Algorithm explanations
+• Programming patterns and techniques
+• Library recommendations and usage
+• General software development guidance
+
+Keep responses practical and coding-focused. Provide code examples when helpful.`;
 
       const fullPrompt = `${systemPrompt}\n\nUser: ${query}`;
 
@@ -191,15 +211,21 @@ For non-workflow questions, provide helpful programming guidance.`;
     }
   };
 
-  const sampleQueries = [
-    "Create a simple workflow with a variable and print statement",
-    "Build a workflow to read a file, process it with python_code, and save results", 
-    "Generate nodes to download a file from URL and save it locally",
-    "Create a workflow that loops through files and transforms text",
-    "Make a workflow with an HTTP request and conditional logic",
-    "How do I use python_code nodes for complex operations?",
-    "What's the difference between variable and python_code nodes?"
-  ];
+  const sampleQueries = queryMode === 'nodes' 
+    ? [
+        "Create a simple workflow with a variable and print statement",
+        "Build a workflow to read a file, process it with python_code, and save results", 
+        "Generate nodes to download a file from URL and save it locally",
+        "Create a workflow that loops through files and transforms text",
+        "Make a workflow with list comprehension and data processing"
+      ]
+    : [
+        "How do I optimize Python code for better performance?",
+        "What's the difference between lists and tuples in Python?",
+        "Explain list comprehensions with examples",
+        "How to handle errors and exceptions in Python?",
+        "Best practices for writing clean, readable code"
+      ];
 
   return (
     <div className="llm-query-panel">
@@ -207,6 +233,20 @@ For non-workflow questions, provide helpful programming guidance.`;
         <div className="llm-query-title">
           <span className="llm-icon">🤖</span>
           <h3>AI Assistant</h3>
+          <div className="query-mode-toggle">
+            <button 
+              className={`mode-toggle-button ${queryMode === 'nodes' ? 'active' : ''}`}
+              onClick={() => setQueryMode('nodes')}
+            >
+              🔗 Nodes
+            </button>
+            <button 
+              className={`mode-toggle-button ${queryMode === 'general' ? 'active' : ''}`}
+              onClick={() => setQueryMode('general')}
+            >
+              💡 Code Help
+            </button>
+          </div>
           <div className={`ollama-status ${ollamaStatus}`}>
             {ollamaStatus === 'checking' && (
               <>
