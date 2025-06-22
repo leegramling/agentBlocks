@@ -270,10 +270,6 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
                   <div className="node-drag-handle" title="Drag to reorder">
                     ⋮⋮
                   </div>
-                  {/* Node content area - actual node will be rendered by WorkflowEditor */}
-                  <div className="node-content-placeholder">
-                    <span className="node-type">{node.type}</span>
-                  </div>
                 </div>
                 
                 {/* Drop zone at the end */}
