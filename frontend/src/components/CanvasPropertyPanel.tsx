@@ -1,18 +1,21 @@
 import React from 'react';
 import type { WorkflowNode } from '../types';
+import VariablePicker from './VariablePicker';
 
 interface CanvasPropertyPanelProps {
   selectedNode: WorkflowNode;
   position: { x: number; y: number };
   onUpdateNode: (node: WorkflowNode) => void;
   onClose: () => void;
+  allNodes: WorkflowNode[];
 }
 
 const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
   selectedNode,
   position,
   onUpdateNode,
-  onClose
+  onClose,
+  allNodes
 }) => {
   const handlePropertyChange = (key: string, value: any) => {
     const updatedNode = {
@@ -100,7 +103,32 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
     }
   };
 
+  // Determine if a field should use variable picker
+  const shouldUseVariablePicker = (nodeType: string, key: string): boolean => {
+    const variableFields: Record<string, string[]> = {
+      'print': ['message'],
+      'assignment': ['variable', 'expression'],
+      'if-then': ['condition'],
+      'foreach': ['iterable', 'variable'],
+      'while': ['condition'],
+      'increment': ['variable'],
+      'list_get': ['list', 'variable'],
+      'list_length': ['list', 'variable'],
+      'list_append': ['list', 'item'],
+      'set_add': ['set', 'item'],
+      'dict_get': ['dict', 'key', 'variable'],
+      'dict_set': ['dict', 'key', 'value'],
+      'variable': ['value'], // For variable values that might reference other variables
+      'bash': ['command'], // Allow variable substitution in bash commands
+      'pycode': ['code'], // Allow variable substitution in Python code
+    };
+    
+    return variableFields[nodeType]?.includes(key) || false;
+  };
+
   const renderPropertyEditor = (key: string, value: any, type: string = 'string') => {
+    const useVariablePicker = shouldUseVariablePicker(selectedNode.type, key);
+    
     switch (type) {
       case 'boolean':
         return (
@@ -121,6 +149,18 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
           />
         );
       case 'textarea':
+        if (useVariablePicker) {
+          return (
+            <VariablePicker
+              value={value || ''}
+              onChange={(newValue) => handlePropertyChange(key, newValue)}
+              currentNode={selectedNode}
+              allNodes={allNodes}
+              className="canvas-property-input"
+              placeholder={`Enter ${key} or select variable`}
+            />
+          );
+        }
         return (
           <textarea
             value={value || ''}
@@ -130,6 +170,18 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
           />
         );
       default:
+        if (useVariablePicker) {
+          return (
+            <VariablePicker
+              value={value || ''}
+              onChange={(newValue) => handlePropertyChange(key, newValue)}
+              currentNode={selectedNode}
+              allNodes={allNodes}
+              className="canvas-property-input"
+              placeholder={`Enter ${key} or select variable`}
+            />
+          );
+        }
         return (
           <input
             type="text"

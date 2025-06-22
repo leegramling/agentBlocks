@@ -1,6 +1,7 @@
 import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import type { WorkflowNode, WorkflowPanel } from '../types';
 import TreeView from './TreeView';
+import VariablePicker from './VariablePicker';
 
 interface PropertiesPanelProps {
   selectedNode: WorkflowNode | null;
@@ -64,7 +65,30 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
     }
   };
 
+  // Determine if a field should use variable picker
+  const shouldUseVariablePicker = (nodeType: string, key: string): boolean => {
+    const variableFields: Record<string, string[]> = {
+      'print': ['message'],
+      'assignment': ['variable', 'expression'],
+      'if-then': ['condition'],
+      'foreach': ['iterable', 'variable'],
+      'while': ['condition'],
+      'increment': ['variable'],
+      'list_get': ['list', 'variable'],
+      'list_length': ['list', 'variable'],
+      'list_append': ['list', 'item'],
+      'set_add': ['set', 'item'],
+      'dict_get': ['dict', 'key', 'variable'],
+      'dict_set': ['dict', 'key', 'value'],
+      'variable': ['value'], // For variable values that might reference other variables
+    };
+    
+    return variableFields[nodeType]?.includes(key) || false;
+  };
+
   const renderPropertyEditor = (key: string, value: any, type: string = 'string') => {
+    const useVariablePicker = selectedNode && shouldUseVariablePicker(selectedNode.type, key);
+    
     switch (type) {
       case 'boolean':
         return (
@@ -100,6 +124,19 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
           />
         );
       default:
+        if (useVariablePicker && selectedNode) {
+          return (
+            <VariablePicker
+              value={value || ''}
+              onChange={(newValue) => handlePropertyChange(key, newValue)}
+              currentNode={selectedNode}
+              allNodes={nodes}
+              className="property-input"
+              placeholder={`Enter ${key} or select variable`}
+              onKeyDown={(e) => handleTabNavigation(e, key)}
+            />
+          );
+        }
         return (
           <input
             ref={(el) => { propertyInputRefs.current[key] = el; }}

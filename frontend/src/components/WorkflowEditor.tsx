@@ -7,6 +7,7 @@ import PropertiesPanel, { type PropertiesPanelRef } from './PropertiesPanel';
 import PanelComponent from './PanelComponent';
 import PanelModal from './PanelModal';
 import CanvasPropertyPanel from './CanvasPropertyPanel';
+import { toPythonFString, hasVariableReferences } from '../utils/variableSubstitution';
 
 interface WorkflowEditorProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
@@ -241,11 +242,23 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         case 'variable':
           const varName = node.properties.name || 'myVariable';
           const varValue = node.properties.value || 'hello world';
+          // Support variable references in values
+          if (hasVariableReferences(varValue)) {
+            return `${indent}${varName} = ${toPythonFString(varValue)}\n`;
+          }
+          // If it's a simple variable reference, use it directly
+          else if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varValue)) {
+            return `${indent}${varName} = ${varValue}\n`;
+          }
           return `${indent}${varName} = "${varValue}"\n`;
         case 'print':
           const message = node.properties.message || 'myVariable';
+          // Check if it contains variable references {variable}
+          if (hasVariableReferences(message)) {
+            return `${indent}print(${toPythonFString(message)})\n`;
+          }
           // If message is just a variable name (no quotes), use it directly
-          if (message && !message.includes('"') && !message.includes("'") && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(message)) {
+          else if (message && !message.includes('"') && !message.includes("'") && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(message)) {
             return `${indent}print(${message})\n`;
           } else {
             return `${indent}print("${message}")\n`;
@@ -310,7 +323,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         case 'list_create':
           const listName = node.properties.name || 'my_list';
           const itemsText = node.properties.items || 'apple\norange\npear';
-          const itemsArray = itemsText.split('\n').filter(item => item.trim()).map(item => `"${item.trim()}"`);
+          const itemsArray = itemsText.split('\n').filter((item: string) => item.trim()).map((item: string) => `"${item.trim()}"`);
           return `${indent}${listName} = [${itemsArray.join(', ')}]\n`;
         case 'list_append':
           const targetList = node.properties.list || 'my_list';
@@ -631,47 +644,44 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       return; // Only allow reordering within the same panel
     }
     
-    // Get all nodes in the same panel, sorted by position
-    const panelNodes = nodes
-      .filter(n => n.panelId === draggedNode.panelId)
-      .sort((a, b) => a.position.y - b.position.y);
-    
-    // Find the target position in the sorted list
-    const targetIndex = panelNodes.findIndex(n => n.id === targetNodeId);
-    const draggedIndex = panelNodes.findIndex(n => n.id === draggedNodeId);
-    
-    if (targetIndex === -1 || draggedIndex === -1) return;
-    
-    // Calculate new Y positions
-    const spacing = 80; // Space between nodes
-    const startY = panelNodes[0].position.y;
-    
-    setNodes(prev => prev.map(node => {
-      if (node.panelId !== draggedNode.panelId) return node;
+    setNodes(prev => {
+      // Separate nodes by panel
+      const panelNodes = prev.filter(n => n.panelId === draggedNode.panelId);
+      const otherNodes = prev.filter(n => n.panelId !== draggedNode.panelId);
       
-      // Create new order array
-      const newOrder = [...panelNodes];
-      newOrder.splice(draggedIndex, 1); // Remove dragged node
+      // Sort panel nodes by their current position
+      const sortedPanelNodes = panelNodes.sort((a, b) => a.position.y - b.position.y);
       
-      // Insert at new position
+      // Find indices
+      const draggedIndex = sortedPanelNodes.findIndex(n => n.id === draggedNodeId);
+      const targetIndex = sortedPanelNodes.findIndex(n => n.id === targetNodeId);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+      
+      // Create new order by reordering the array
+      const reorderedNodes = [...sortedPanelNodes];
+      const [draggedNodeObj] = reorderedNodes.splice(draggedIndex, 1); // Remove dragged node
+      
+      // Calculate insert position
       const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
       const adjustedIndex = insertIndex > draggedIndex ? insertIndex - 1 : insertIndex;
-      newOrder.splice(adjustedIndex, 0, draggedNode);
       
-      // Find this node's new position in the reordered array
-      const nodeIndexInNewOrder = newOrder.findIndex(n => n.id === node.id);
-      if (nodeIndexInNewOrder >= 0) {
-        return {
-          ...node,
-          position: {
-            ...node.position,
-            y: startY + (nodeIndexInNewOrder * spacing)
-          }
-        };
-      }
+      // Insert dragged node at new position
+      reorderedNodes.splice(adjustedIndex, 0, draggedNodeObj);
       
-      return node;
-    }));
+      // Update positions to match new order - use same spacing as main canvas (52px)
+      const baseY = panels.find(p => p.id === draggedNode.panelId)?.position.y || 100;
+      const updatedPanelNodes = reorderedNodes.map((node, index) => ({
+        ...node,
+        position: {
+          ...node.position,
+          y: baseY + 56 + (index * 52) // Same calculation as main canvas: panel.y + header + (index * spacing)
+        }
+      }));
+      
+      // Combine with other nodes and return
+      return [...otherNodes, ...updatedPanelNodes];
+    });
   }, [nodes]);
 
   const handlePanelDrag = useCallback((panelId: string, newPosition: Position) => {
@@ -1270,12 +1280,25 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               
               // If node is in a panel, position it relative to the panel
               if (panel && panel.isExpanded) {
+                // Use the node's actual position.y if it has been set (for custom ordering)
+                // Otherwise calculate based on array index for new nodes
                 const panelNodes = nodes.filter(n => n.panelId === panel.id);
-                const nodeIndex = panelNodes.findIndex(n => n.id === node.id);
-                nodePosition = {
-                  x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
-                  y: panel.position.y + 56 + (nodeIndex * 52) // header + padding + node spacing
-                };
+                const hasCustomPosition = node.position.y !== undefined && node.position.y > 0;
+                
+                if (hasCustomPosition) {
+                  // Use custom position but still apply panel offset and indentation
+                  nodePosition = {
+                    x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
+                    y: node.position.y
+                  };
+                } else {
+                  // Calculate position based on array index for new nodes
+                  const nodeIndex = panelNodes.findIndex(n => n.id === node.id);
+                  nodePosition = {
+                    x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
+                    y: panel.position.y + 56 + (nodeIndex * 52) // header + padding + node spacing
+                  };
+                }
               }
               
               return (
@@ -1501,7 +1524,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         };
         
         // Check if this would overlap with any other panels
-        const propertyPanelWidth = 320; // Width of canvas property panel
+        const propertyPanelWidth = 280; // Width of canvas property panel (matches CSS)
         const canvasWidth = 1200; // Approximate canvas width
         
         // If positioning to the right would go off screen or overlap, try left side
@@ -1524,6 +1547,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               setSelectedNode(node);
             }}
             onClose={() => setShowCanvasPropertyPanel(false)}
+            allNodes={nodes}
           />
         );
       })()}
