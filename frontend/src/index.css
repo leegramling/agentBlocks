@@ -2120,8 +2120,6 @@ body {
   font-size: 12px;
   margin-left: auto;
 }
-  gap: 6px;
-}
 
 .code-action-button:hover {
   background: #4b5563;
