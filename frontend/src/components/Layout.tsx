@@ -6,6 +6,7 @@ interface LayoutProps {
   children: React.ReactNode;
   consoleOutput?: string[];
   isExecuting?: boolean;
+  nodeCount?: number;
   onExecute?: () => void;
   onClearConsole?: () => void;
   onGenerateCode?: () => string;
@@ -18,6 +19,7 @@ const Layout: React.FC<LayoutProps> = ({
   children, 
   consoleOutput = [], 
   isExecuting = false, 
+  nodeCount = 0,
   onExecute, 
   onClearConsole,
   onGenerateCode,
@@ -81,9 +83,9 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* Status Bar */}
       <div className="status-bar">
-        <span className="status-item">Ready</span>
+        <span className="status-item">{isExecuting ? 'Running...' : 'Ready'}</span>
         <span className="status-separator">|</span>
-        <span className="status-item">0 blocks</span>
+        <span className="status-item">{nodeCount} node{nodeCount !== 1 ? 's' : ''}</span>
         <span className="status-separator">|</span>
         <span className="status-item">Last saved: Never</span>
         <span className="status-separator">|</span>

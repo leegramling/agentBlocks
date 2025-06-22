@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import type { WorkflowNode, WorkflowPanel } from '../types';
 import TreeView from './TreeView';
 
@@ -12,7 +12,11 @@ interface PropertiesPanelProps {
   onPanelSelect: (panel: WorkflowPanel) => void;
 }
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ 
+export interface PropertiesPanelRef {
+  focusFirstProperty: () => void;
+}
+
+const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({ 
   selectedNode, 
   selectedPanel,
   nodes,
@@ -20,7 +24,17 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   onUpdateNode,
   onNodeSelect,
   onPanelSelect 
-}) => {
+}, ref) => {
+  const propertyInputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
+
+  useImperativeHandle(ref, () => ({
+    focusFirstProperty: () => {
+      const firstInputKey = Object.keys(propertyInputRefs.current)[0];
+      if (firstInputKey && propertyInputRefs.current[firstInputKey]) {
+        propertyInputRefs.current[firstInputKey]?.focus();
+      }
+    }
+  }));
   const handlePropertyChange = (key: string, value: any) => {
     if (!selectedNode) return;
     
@@ -34,31 +48,53 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     onUpdateNode(updatedNode);
   };
 
+  const handleTabNavigation = (e: React.KeyboardEvent, currentKey: string) => {
+    if (e.key === 'Tab') {
+      const keys = Object.keys(propertyInputRefs.current);
+      const currentIndex = keys.indexOf(currentKey);
+      const nextIndex = e.shiftKey 
+        ? (currentIndex - 1 + keys.length) % keys.length
+        : (currentIndex + 1) % keys.length;
+      const nextKey = keys[nextIndex];
+      
+      if (nextKey && propertyInputRefs.current[nextKey]) {
+        e.preventDefault();
+        propertyInputRefs.current[nextKey]?.focus();
+      }
+    }
+  };
+
   const renderPropertyEditor = (key: string, value: any, type: string = 'string') => {
     switch (type) {
       case 'boolean':
         return (
           <input
+            ref={(el) => { propertyInputRefs.current[key] = el; }}
             type="checkbox"
             checked={value || false}
             onChange={(e) => handlePropertyChange(key, e.target.checked)}
+            onKeyDown={(e) => handleTabNavigation(e, key)}
             className="rounded"
           />
         );
       case 'number':
         return (
           <input
+            ref={(el) => { propertyInputRefs.current[key] = el; }}
             type="number"
             value={value || ''}
             onChange={(e) => handlePropertyChange(key, parseFloat(e.target.value))}
+            onKeyDown={(e) => handleTabNavigation(e, key)}
             className="property-input"
           />
         );
       case 'textarea':
         return (
           <textarea
+            ref={(el) => { propertyInputRefs.current[key] = el; }}
             value={value || ''}
             onChange={(e) => handlePropertyChange(key, e.target.value)}
+            onKeyDown={(e) => handleTabNavigation(e, key)}
             className="property-input"
             rows={3}
           />
@@ -66,9 +102,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       default:
         return (
           <input
+            ref={(el) => { propertyInputRefs.current[key] = el; }}
             type="text"
             value={value || ''}
             onChange={(e) => handlePropertyChange(key, e.target.value)}
+            onKeyDown={(e) => handleTabNavigation(e, key)}
             className="property-input"
           />
         );
@@ -262,6 +300,8 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       </div>
     </div>
   );
-};
+});
+
+PropertiesPanel.displayName = 'PropertiesPanel';
 
 export default PropertiesPanel;

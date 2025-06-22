@@ -7,6 +7,7 @@ import Layout from './components/Layout';
 function App() {
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [nodeCount, setNodeCount] = useState(0);
   
   // These will be passed to and managed by WorkflowEditor
   const [executeCallback, setExecuteCallback] = useState<(() => void) | null>(null);
@@ -53,6 +54,7 @@ function App() {
         <Layout
           consoleOutput={consoleOutput}
           isExecuting={isExecuting}
+          nodeCount={nodeCount}
           onExecute={handleExecute}
           onClearConsole={handleClearConsole}
           onGenerateCode={handleGenerateCode}
@@ -67,6 +69,7 @@ function App() {
                 <WorkflowEditor 
                   onConsoleOutput={handleConsoleOutput}
                   onExecutionState={setIsExecuting}
+                  onNodeCountChange={setNodeCount}
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
                   onRegisterSave={setSaveCallback}
@@ -80,6 +83,7 @@ function App() {
                 <WorkflowEditor 
                   onConsoleOutput={handleConsoleOutput}
                   onExecutionState={setIsExecuting}
+                  onNodeCountChange={setNodeCount}
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
                   onRegisterSave={setSaveCallback}

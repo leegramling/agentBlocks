@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Trash2, FileText } from 'lucide-react';
 import CodeModal from './CodeModal';
 
@@ -19,6 +19,14 @@ const Console: React.FC<ConsoleProps> = ({
 }) => {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
+  const consoleOutputRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when output changes
+  useEffect(() => {
+    if (consoleOutputRef.current) {
+      consoleOutputRef.current.scrollTop = consoleOutputRef.current.scrollHeight;
+    }
+  }, [output]);
 
   const handleShowCode = () => {
     console.log('handleShowCode called, onGenerateCode available:', !!onGenerateCode);
@@ -68,7 +76,7 @@ const Console: React.FC<ConsoleProps> = ({
       </div>
 
       {/* Console Output */}
-      <div className="console-output">
+      <div className="console-output" ref={consoleOutputRef}>
         {output.length === 0 ? (
           <div style={{ color: '#6b7280', fontStyle: 'italic' }}>
             Console ready. Add some nodes and click Execute to see output...

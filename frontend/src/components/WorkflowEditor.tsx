@@ -3,13 +3,14 @@ import type { WorkflowNode, Connection, Position, WorkflowPanel } from '../types
 import NodeComponent from './NodeComponent';
 import ConnectionLine from './ConnectionLine';
 import NodePalette from './NodePalette';
-import PropertiesPanel from './PropertiesPanel';
+import PropertiesPanel, { type PropertiesPanelRef } from './PropertiesPanel';
 import PanelComponent from './PanelComponent';
 import PanelModal from './PanelModal';
 
 interface WorkflowEditorProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
   onExecutionState?: (isExecuting: boolean) => void;
+  onNodeCountChange?: (count: number) => void;
   onRegisterExecute?: (callback: () => void) => void;
   onRegisterGenerateCode?: (callback: () => string) => void;
   onRegisterSave?: (callback: () => void) => void;
@@ -19,6 +20,7 @@ interface WorkflowEditorProps {
 const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   onConsoleOutput,
   onExecutionState,
+  onNodeCountChange,
   onRegisterExecute,
   onRegisterGenerateCode,
   onRegisterSave,
@@ -36,8 +38,13 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [showPanelModal, setShowPanelModal] = useState(false);
+  const [canvasZoom, setCanvasZoom] = useState(1);
+  const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  const propertiesPanelRef = useRef<PropertiesPanelRef>(null);
   
   // Refs to capture current state for callbacks
   const nodesRef = useRef<WorkflowNode[]>([]);
@@ -82,7 +89,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   // Update refs when state changes
   useEffect(() => {
     nodesRef.current = nodes;
-  }, [nodes]);
+    onNodeCountChange?.(nodes.length);
+  }, [nodes, onNodeCountChange]);
   
   useEffect(() => {
     connectionsRef.current = connections;
@@ -330,8 +338,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   }, [nodes, generatePythonCodeFromNodes]);
 
   const executeWorkflow = useCallback(async () => {
-    const currentNodes = nodesRef.current;
-    if (currentNodes.length === 0) {
+    if (nodes.length === 0) {
       onConsoleOutput?.(prev => [...prev, 'Error: No nodes to execute']);
       return;
     }
@@ -341,7 +348,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     
     try {
       // Generate Python code using current nodes
-      const pythonCode = generatePythonCodeFromNodes(currentNodes);
+      const pythonCode = generatePythonCodeFromNodes(nodes);
       onConsoleOutput?.(prev => [...prev, 'Generated Python Code:', pythonCode]);
       
       // Simulate execution for demo purposes
@@ -387,7 +394,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       onConsoleOutput?.(prev => [...prev, `Error: ${error}`]);
       onExecutionState?.(false);
     }
-  }, [onConsoleOutput, onExecutionState]); // Removed dependencies that cause re-creation
+  }, [nodes, generatePythonCodeFromNodes, onConsoleOutput, onExecutionState]);
 
   const saveWorkflow = useCallback(() => {
     const currentNodes = nodesRef.current;
@@ -598,18 +605,92 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       setSelectedNode(null);
     }
   }, [selectedNode]);
+
+  const handleDuplicateSelectedNode = useCallback(() => {
+    if (selectedNode) {
+      const newNode: WorkflowNode = {
+        ...selectedNode,
+        id: `${selectedNode.type}-${Date.now()}`,
+        position: {
+          x: selectedNode.position.x + 30,
+          y: selectedNode.position.y + 30
+        }
+      };
+      setNodes(prev => [...prev, newNode]);
+      setSelectedNode(newNode);
+      onConsoleOutput?.(prev => [...prev, `✅ Duplicated node: ${selectedNode.type}`]);
+    }
+  }, [selectedNode, onConsoleOutput]);
   
+  // Handle canvas recenter
+  const handleRecenterCanvas = useCallback(() => {
+    if (panels.length === 0) return;
+
+    // Calculate bounds of all panels
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    panels.forEach(panel => {
+      minX = Math.min(minX, panel.position.x);
+      minY = Math.min(minY, panel.position.y);
+      maxX = Math.max(maxX, panel.position.x + panel.size.width);
+      maxY = Math.max(maxY, panel.position.y + panel.size.height);
+    });
+
+    // Add some padding
+    const padding = 100;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+
+    // Calculate center point
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    // Get canvas viewport size (assuming typical values)
+    const viewportWidth = 800;
+    const viewportHeight = 600;
+
+    // Set pan to center the content
+    setCanvasPan({
+      x: viewportWidth / 2 - centerX,
+      y: viewportHeight / 2 - centerY
+    });
+
+    // Optionally adjust zoom to fit all panels
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+    const zoomX = viewportWidth / contentWidth;
+    const zoomY = viewportHeight / contentHeight;
+    const newZoom = Math.min(Math.min(zoomX, zoomY), 1); // Don't zoom in beyond 100%
+
+    if (newZoom > 0.2) {
+      setCanvasZoom(newZoom);
+    }
+  }, [panels]);
+
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' && selectedNode) {
+      // Check if user is typing in an input field
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || 
+                      target.tagName === 'TEXTAREA' || 
+                      target.isContentEditable ||
+                      target.closest('input') ||
+                      target.closest('textarea');
+
+      if (e.key === 'Delete' && selectedNode && !isTyping) {
         handleDeleteSelectedNode();
+      } else if (e.key === ' ' && !e.repeat && !isTyping) {
+        e.preventDefault();
+        handleRecenterCanvas();
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, handleDeleteSelectedNode]);
+  }, [selectedNode, handleDeleteSelectedNode, handleRecenterCanvas]);
 
   const handleImportWorkflow = useCallback((workflowData: any) => {
     try {
@@ -716,13 +797,56 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     return colors[type] || '#6b7280';
   };
 
+  // Canvas zoom and pan handlers
+  const handleCanvasWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const zoomFactor = 0.1;
+    const newZoom = e.deltaY > 0 
+      ? Math.max(0.2, canvasZoom - zoomFactor)
+      : Math.min(3, canvasZoom + zoomFactor);
+    setCanvasZoom(newZoom);
+  }, [canvasZoom]);
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) { // Middle mouse or Ctrl+click
+      e.preventDefault();
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y });
+    }
+  }, [canvasPan]);
+
+  const handleCanvasMouseMove = useCallback((e: MouseEvent) => {
+    if (isPanning) {
+      setCanvasPan({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y
+      });
+    }
+  }, [isPanning, panStart]);
+
+  const handleCanvasMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Add global mouse event listeners for panning
+  useEffect(() => {
+    if (isPanning) {
+      document.addEventListener('mousemove', handleCanvasMouseMove);
+      document.addEventListener('mouseup', handleCanvasMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleCanvasMouseMove);
+        document.removeEventListener('mouseup', handleCanvasMouseUp);
+      };
+    }
+  }, [isPanning, handleCanvasMouseMove, handleCanvasMouseUp]);
+
   // Register callbacks with parent (stable callbacks)
   useEffect(() => {
     onRegisterExecute?.(executeWorkflow);
     onRegisterGenerateCode?.(generatePythonCode);
     onRegisterSave?.(saveWorkflow);
     onRegisterImportWorkflow?.(handleImportWorkflow);
-  }, [onRegisterExecute, onRegisterGenerateCode, onRegisterSave, onRegisterImportWorkflow, handleImportWorkflow]); // Remove callback dependencies to prevent re-registration
+  }, [executeWorkflow, generatePythonCode, saveWorkflow, handleImportWorkflow, onRegisterExecute, onRegisterGenerateCode, onRegisterSave, onRegisterImportWorkflow]);
 
   const getDefaultInputs = (type: string) => {
     switch (type) {
@@ -777,9 +901,70 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       {/* Block Palette */}
       <NodePalette onAddNode={handleAddNode} />
 
-      {/* Canvas Area */}
-      <div className="canvas-area" ref={canvasRef} onDrop={handleDrop} onDragOver={handleDragOver}>
-        <div className="canvas-content">
+      {/* Canvas Container */}
+      <div className="canvas-container">
+        {/* Toolbar */}
+        <div className="canvas-toolbar">
+          <div className="toolbar-left">
+            {selectedNode && (
+              <>
+                <button 
+                  className="toolbar-button"
+                  onClick={() => propertiesPanelRef.current?.focusFirstProperty()}
+                  title="Edit Properties"
+                >
+                  ✏️ Edit
+                </button>
+                <button 
+                  className="toolbar-button"
+                  onClick={handleDuplicateSelectedNode}
+                  title="Duplicate Node"
+                >
+                  📋 Duplicate
+                </button>
+                <button 
+                  className="toolbar-button"
+                  onClick={handleDeleteSelectedNode}
+                  title="Delete Node"
+                >
+                  🗑️ Delete
+                </button>
+              </>
+            )}
+          </div>
+          
+          <div className="toolbar-center">
+            <span className="zoom-indicator">Zoom: {Math.round(canvasZoom * 100)}%</span>
+            <span className="toolbar-hint">Spacebar: Recenter | Mouse wheel: Zoom | Ctrl+Click: Pan</span>
+          </div>
+          
+          <div className="toolbar-right">
+            <button 
+              className="toolbar-button primary"
+              onClick={() => setShowPanelModal(true)}
+            >
+              + Add Module
+            </button>
+          </div>
+        </div>
+
+        {/* Canvas Area */}
+      <div 
+        className="canvas-area" 
+        ref={canvasRef} 
+        onDrop={handleDrop} 
+        onDragOver={handleDragOver}
+        onWheel={handleCanvasWheel}
+        onMouseDown={handleCanvasMouseDown}
+        style={{ cursor: isPanning ? 'grabbing' : 'default' }}
+      >
+        <div 
+          className="canvas-content"
+          style={{
+            transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${canvasZoom})`,
+            transformOrigin: '0 0'
+          }}
+        >
           <div className="grid-background" />
           
           {/* Panels */}
@@ -961,64 +1146,64 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 
         {/* Minimap */}
         <div className="minimap">
-          <div className="minimap-header">Minimap</div>
+          <div className="minimap-header">Minimap (Zoom: {Math.round(canvasZoom * 100)}%)</div>
           <div className="minimap-content">
-            <svg width="120" height="80" viewBox="0 0 1600 1200" className="minimap-svg">
+            <svg 
+              width="120" 
+              height="80" 
+              viewBox="0 0 1600 1200" 
+              className="minimap-svg"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 1600;
+                const y = ((e.clientY - rect.top) / rect.height) * 1200;
+                setCanvasPan({ x: -x * canvasZoom + 400, y: -y * canvasZoom + 300 });
+              }}
+            >
               <rect width="1600" height="1200" fill="#111827" />
-              {nodes.map(node => (
+              
+              {/* Panel rectangles */}
+              {panels.map(panel => (
                 <rect
+                  key={`minimap-panel-${panel.id}`}
+                  x={panel.position.x / 8}
+                  y={panel.position.y / 8}
+                  width={panel.size.width / 8}
+                  height={panel.size.height / 8}
+                  fill={panel.color || '#3b82f6'}
+                  stroke="#ffffff"
+                  strokeWidth="0.5"
+                  opacity="0.6"
+                />
+              ))}
+              
+              {/* Node dots */}
+              {nodes.filter(node => !node.panelId).map(node => (
+                <circle
                   key={`minimap-${node.id}`}
-                  x={node.position.x / 8}
-                  y={node.position.y / 8}
-                  width="22.5"
-                  height="10"
+                  cx={node.position.x / 8 + 5}
+                  cy={node.position.y / 8 + 5}
+                  r="2"
                   fill={getNodeColor(node.type)}
                   opacity="0.8"
                 />
               ))}
+              
+              {/* Viewport indicator */}
+              <rect
+                x={-canvasPan.x / 8}
+                y={-canvasPan.y / 8}
+                width={800 / canvasZoom / 8}
+                height={600 / canvasZoom / 8}
+                fill="none"
+                stroke="#60a5fa"
+                strokeWidth="1"
+                opacity="0.8"
+              />
             </svg>
           </div>
         </div>
-        
-        {/* Canvas Controls */}
-        <div className="canvas-controls">
-          <button 
-            className="canvas-control-button primary"
-            onClick={() => setShowPanelModal(true)}
-          >
-            + Add Module
-          </button>
-        </div>
-
-        {/* Node Action Controls */}
-        {selectedNode && (
-          <div className="node-action-controls">
-            <button 
-              className="node-action-button"
-              onClick={() => window.open(`/block-editor/${selectedNode.id}`, '_blank')}
-              title="Edit Blocks"
-            >
-              ✏️
-            </button>
-            <button 
-              className="node-action-button"
-              onClick={() => {
-                // Duplicate node logic would go here
-                console.log('Duplicate node:', selectedNode.id);
-              }}
-              title="Duplicate Node"
-            >
-              📋
-            </button>
-            <button 
-              className="node-action-button delete"
-              onClick={handleDeleteSelectedNode}
-              title="Delete Node"
-            >
-              🗑️
-            </button>
-          </div>
-        )}
+      </div>
       </div>
 
       {/* Panel Modal */}
@@ -1030,6 +1215,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 
       {/* Right Panel - Properties */}
       <PropertiesPanel 
+        ref={propertiesPanelRef}
         selectedNode={selectedNode}
         selectedPanel={selectedPanel}
         nodes={nodes}

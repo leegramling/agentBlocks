@@ -273,7 +273,6 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
                   {/* Node content area - actual node will be rendered by WorkflowEditor */}
                   <div className="node-content-placeholder">
                     <span className="node-type">{node.type}</span>
-                    <span className="node-id">#{node.id.slice(-4)}</span>
                   </div>
                 </div>
                 
