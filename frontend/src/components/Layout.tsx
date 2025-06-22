@@ -1,5 +1,6 @@
 import React from 'react';
 import Console from './Console';
+import LLMQueryPanel from './LLMQueryPanel';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,6 +10,7 @@ interface LayoutProps {
   onClearConsole?: () => void;
   onGenerateCode?: () => string;
   onSave?: () => void;
+  onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -18,7 +20,8 @@ const Layout: React.FC<LayoutProps> = ({
   onExecute, 
   onClearConsole,
   onGenerateCode,
-  onSave 
+  onSave,
+  onConsoleOutput
 }) => {
   return (
     <div className="layout">
@@ -84,6 +87,9 @@ const Layout: React.FC<LayoutProps> = ({
         <span className="status-separator">|</span>
         <span className="status-item">Python 3.11</span>
       </div>
+
+      {/* LLM Query Panel */}
+      <LLMQueryPanel onConsoleOutput={onConsoleOutput} />
 
       {/* Console Panel */}
       <Console 

@@ -50,6 +50,7 @@ function App() {
           onClearConsole={handleClearConsole}
           onGenerateCode={handleGenerateCode}
           onSave={handleSave}
+          onConsoleOutput={handleConsoleOutput}
         >
           <Routes>
             <Route 

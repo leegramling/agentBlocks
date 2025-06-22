@@ -1159,6 +1159,262 @@ body {
   box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
 }
 
+/* LLM Query Panel */
+.llm-query-panel {
+  background: #1f2937;
+  border-top: 1px solid #374151;
+  display: flex;
+  flex-direction: column;
+  height: 180px;
+  overflow: hidden;
+}
+
+.llm-query-header {
+  background: #111827;
+  border-bottom: 1px solid #374151;
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.llm-query-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.llm-icon {
+  font-size: 16px;
+}
+
+.llm-query-title h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.ollama-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.ollama-status.checking {
+  color: #fbbf24;
+}
+
+.ollama-status.connected {
+  color: #10b981;
+}
+
+.ollama-status.disconnected {
+  color: #ef4444;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.connected {
+  background: #10b981;
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.5);
+}
+
+.status-dot.disconnected {
+  background: #ef4444;
+}
+
+.status-spinner,
+.button-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #374151;
+  border-top: 2px solid #fbbf24;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.button-spinner {
+  width: 14px;
+  height: 14px;
+  border-top-color: #ffffff;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.model-select {
+  background: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 11px;
+  padding: 2px 6px;
+  min-width: 120px;
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.ollama-help {
+  font-size: 11px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ollama-help p {
+  margin: 0;
+}
+
+.ollama-help code {
+  background: #374151;
+  color: #fbbf24;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+}
+
+.llm-query-content {
+  flex: 1;
+  padding: 12px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.query-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.query-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.query-textarea {
+  flex: 1;
+  background: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  padding: 8px 12px;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.4;
+  transition: border-color 0.2s;
+}
+
+.query-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.query-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.query-submit {
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 100px;
+  justify-content: center;
+  height: fit-content;
+}
+
+.query-submit:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.query-submit:disabled {
+  background: #4b5563;
+  color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.query-submit.loading {
+  background: #4b5563;
+}
+
+.keyboard-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+
+.sample-queries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sample-queries-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.sample-queries-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sample-query-button {
+  background: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  color: #d1d5db;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.sample-query-button:hover:not(:disabled) {
+  background: #4b5563;
+  border-color: #6b7280;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.sample-query-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .panel-content {
   padding: 16px;
   height: calc(100% - 40px);
