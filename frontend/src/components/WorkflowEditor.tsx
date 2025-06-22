@@ -170,13 +170,61 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     const blockType = e.dataTransfer.getData('blockType');
     if (blockType && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      const position = {
-        x: e.clientX - rect.left - 60, // Center the node
-        y: e.clientY - rect.top - 20
+      const dropPosition = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
       };
-      handleAddNode(blockType, position);
+      
+      // Check if the drop is over any existing panel
+      const droppedOnPanel = panels.find(panel => {
+        const panelLeft = panel.position.x;
+        const panelTop = panel.position.y;
+        const panelRight = panelLeft + panel.size.width;
+        const panelBottom = panelTop + panel.size.height;
+        
+        return dropPosition.x >= panelLeft && 
+               dropPosition.x <= panelRight && 
+               dropPosition.y >= panelTop && 
+               dropPosition.y <= panelBottom;
+      });
+      
+      // If dropped on an existing panel, let the panel handle it
+      if (droppedOnPanel) {
+        return; // Panel's drop handler will take care of this
+      }
+      
+      // Create a new module for canvas drops
+      const moduleCount = panels.filter(p => p.type === 'module').length;
+      const moduleName = `Module${String(moduleCount + 1).padStart(2, '0')}`;
+      
+      const newPanel: WorkflowPanel = {
+        id: `module_${Date.now()}`,
+        name: moduleName,
+        type: 'module',
+        position: { 
+          x: dropPosition.x - 140, // Center panel on drop position
+          y: dropPosition.y - 30
+        },
+        size: { width: 280, height: 120 },
+        color: '#8b5cf6',
+        isExpanded: true
+      };
+      
+      // Add the new panel
+      setPanels(prev => [...prev, newPanel]);
+      setSelectedPanel(newPanel);
+      
+      // Add the node to the new panel
+      const nodePosition = {
+        x: 16, // Left padding within panel
+        y: 16  // Top padding within panel
+      };
+      
+      handleAddNode(blockType, nodePosition, newPanel.id);
+      
+      onConsoleOutput?.(prev => [...prev, `📦 Created ${moduleName} with ${blockType} node`]);
     }
-  }, [handleAddNode]);
+  }, [handleAddNode, panels, onConsoleOutput]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -748,43 +796,65 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   
   const handleNodeReorder = useCallback((panelId: string, nodeId: string, newIndex: number) => {
     setNodes(prev => {
-      const panelNodes = prev.filter(node => node.panelId === panelId).sort((a, b) => a.position.y - b.position.y);
       const targetNode = prev.find(node => node.id === nodeId);
+      const targetPanel = panels.find(p => p.id === panelId);
       
-      if (!targetNode || !panelNodes.length) return prev;
+      if (!targetNode || !targetPanel) return prev;
       
-      // Remove the dragged node from its current position
-      const filteredNodes = panelNodes.filter(node => node.id !== nodeId);
+      const sourcePanel = panels.find(p => p.id === targetNode.panelId);
+      const isMovingBetweenPanels = targetNode.panelId !== panelId;
       
-      // Insert at new position
-      const reorderedPanelNodes = [...filteredNodes];
-      reorderedPanelNodes.splice(newIndex, 0, targetNode);
-      
-      // Update positions for all nodes in the panel
-      const panel = panels.find(p => p.id === panelId);
-      if (panel) {
-        const updatedNodes = prev.map(node => {
-          if (node.panelId === panelId) {
-            const nodeIndex = reorderedPanelNodes.findIndex(n => n.id === node.id);
-            if (nodeIndex !== -1) {
-              return {
-                ...node,
-                position: {
-                  x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
-                  y: panel.position.y + 56 + (nodeIndex * 52) // header + padding + spacing
-                }
-              };
-            }
-          }
-          return node;
-        });
-        
-        return updatedNodes;
+      if (isMovingBetweenPanels) {
+        onConsoleOutput?.(prev => [...prev, `🔄 Moved ${targetNode.type} node from ${sourcePanel?.name || 'unknown'} to ${targetPanel.name}`]);
       }
       
-      return prev;
+      // Get all nodes except the one being moved
+      const otherNodes = prev.filter(node => node.id !== nodeId);
+      
+      // Get current nodes in target panel, sorted by position
+      const targetPanelNodes = otherNodes.filter(node => node.panelId === panelId)
+        .sort((a, b) => a.position.y - b.position.y);
+      
+      // Insert the moved node at the new index
+      targetPanelNodes.splice(newIndex, 0, {
+        ...targetNode,
+        panelId: panelId, // Update panel assignment
+        parentId: undefined, // Clear parent when moving between panels
+        indentLevel: 0 // Reset indent level when moving between panels
+      });
+      
+      // Update positions for all nodes in the target panel
+      const updatedTargetPanelNodes = targetPanelNodes.map((node, index) => ({
+        ...node,
+        position: {
+          x: targetPanel.position.x + 16 + ((node.indentLevel || 0) * 24),
+          y: targetPanel.position.y + 56 + (index * 52) // header + padding + spacing
+        }
+      }));
+      
+      // Combine with other nodes not in the target panel
+      const nodesNotInTargetPanel = otherNodes.filter(node => node.panelId !== panelId);
+      
+      // If moving between panels, also update positions in source panel
+      if (isMovingBetweenPanels && sourcePanel) {
+        const sourcePanelNodes = nodesNotInTargetPanel.filter(node => node.panelId === sourcePanel.id)
+          .sort((a, b) => a.position.y - b.position.y)
+          .map((node, index) => ({
+            ...node,
+            position: {
+              x: sourcePanel.position.x + 16 + ((node.indentLevel || 0) * 24),
+              y: sourcePanel.position.y + 56 + (index * 52)
+            }
+          }));
+        
+        // Replace source panel nodes with repositioned ones
+        const nodesNotInEitherPanel = nodesNotInTargetPanel.filter(node => node.panelId !== sourcePanel.id);
+        return [...nodesNotInEitherPanel, ...sourcePanelNodes, ...updatedTargetPanelNodes];
+      }
+      
+      return [...nodesNotInTargetPanel, ...updatedTargetPanelNodes];
     });
-  }, [panels]);
+  }, [panels, onConsoleOutput]);
   
   const handleDeleteSelectedNode = useCallback(() => {
     if (selectedNode) {

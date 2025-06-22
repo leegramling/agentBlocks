@@ -68,6 +68,13 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
     height: Math.max(panel.size.height, minSize.height)
   };
 
+  // Auto-resize panel when content changes
+  React.useEffect(() => {
+    if (actualSize.height > panel.size.height || actualSize.width > panel.size.width) {
+      onResize(panel.id, actualSize);
+    }
+  }, [actualSize.height, actualSize.width, panel.size.height, panel.size.width, panel.id, onResize]);
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('panel-header')) {
       setIsDragging(true);
@@ -127,7 +134,14 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
     e.stopPropagation();
     
     const blockType = e.dataTransfer.getData('blockType');
-    if (blockType && panel.isExpanded) {
+    const nodeId = e.dataTransfer.getData('nodeId');
+    
+    if (!panel.isExpanded) {
+      return; // Can't drop on collapsed panels
+    }
+    
+    if (blockType) {
+      // Handle new node from palette
       const rect = panelRef.current?.getBoundingClientRect();
       if (rect) {
         const relativeY = e.clientY - rect.top - 40; // Subtract header height
@@ -151,6 +165,18 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
         };
         
         onNodeDrop(panel.id, relativePosition, blockType, insertAfterNodeId);
+      }
+    } else if (nodeId) {
+      // Handle moving existing node between panels
+      const rect = panelRef.current?.getBoundingClientRect();
+      if (rect) {
+        const relativeY = e.clientY - rect.top - 40; // Subtract header height
+        const nodeHeight = 44;
+        const nodeSpacing = 8;
+        const targetIndex = Math.max(0, Math.floor(relativeY / (nodeHeight + nodeSpacing)));
+        
+        // Move the node to this panel at the specified index
+        onNodeReorder(panel.id, nodeId, targetIndex);
       }
     }
   };
