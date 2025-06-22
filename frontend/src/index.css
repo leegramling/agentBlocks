@@ -795,14 +795,14 @@ body {
 .workflow-node {
   display: flex;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 6px;
   border-left: 3px solid;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
-  min-height: 44px;
-  width: 220px;
+  min-height: 50px;
+  width: 253px; /* 15% wider than 220px */
   background: #1e293b;
 }
 
@@ -847,16 +847,17 @@ body {
 }
 
 .node-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 10px;
-  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 10px;
   color: white;
   font-weight: bold;
+  flex-shrink: 0;
 }
 
 .node-header {
@@ -869,13 +870,28 @@ body {
 .node-title-section {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .node-title {
-  font-weight: 500;
-  font-size: 13px;
-  margin-bottom: 2px;
+  font-weight: 600;
+  font-size: 11px;
+  margin-bottom: 0;
   color: #f8fafc;
+  line-height: 1.2;
+}
+
+.node-code-preview {
+  color: #94a3b8;
+  font-size: 9px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .node-subtitle {

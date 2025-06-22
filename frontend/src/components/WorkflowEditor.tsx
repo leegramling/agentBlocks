@@ -1065,11 +1065,33 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const handleCanvasWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = 0.1;
+    const oldZoom = canvasZoom;
     const newZoom = e.deltaY > 0 
       ? Math.max(0.2, canvasZoom - zoomFactor)
       : Math.min(3, canvasZoom + zoomFactor);
-    setCanvasZoom(newZoom);
-  }, [canvasZoom]);
+    
+    if (newZoom !== oldZoom) {
+      // Get mouse position relative to canvas
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        // Calculate the point in canvas coordinates that the mouse is over
+        const canvasPointX = (mouseX - canvasPan.x) / oldZoom;
+        const canvasPointY = (mouseY - canvasPan.y) / oldZoom;
+        
+        // Calculate new pan to keep the mouse point stationary
+        const newPanX = mouseX - canvasPointX * newZoom;
+        const newPanY = mouseY - canvasPointY * newZoom;
+        
+        setCanvasZoom(newZoom);
+        setCanvasPan({ x: newPanX, y: newPanY });
+      } else {
+        setCanvasZoom(newZoom);
+      }
+    }
+  }, [canvasZoom, canvasPan]);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && e.ctrlKey)) { // Middle mouse or Ctrl+click
@@ -1589,7 +1611,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         // Calculate position to avoid overlapping with main panel
         // First try to position to the right of the node's panel
         let panelPosition = {
-          x: nodePanel.position.x + nodePanel.size.width + 20,
+          x: nodePanel.position.x + nodePanel.size.width + 120, // +100px as requested
           y: nodePanel.position.y
         };
         
@@ -1599,7 +1621,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         
         // If positioning to the right would go off screen or overlap, try left side
         if (panelPosition.x + propertyPanelWidth > canvasWidth) {
-          panelPosition.x = nodePanel.position.x - propertyPanelWidth - 20;
+          panelPosition.x = nodePanel.position.x - propertyPanelWidth - 120;
           
           // If left side would also go off screen, position it above/below
           if (panelPosition.x < 0) {

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import type { WorkflowNode, Position, Connection } from '../types';
+import { toPythonFString, hasVariableReferences } from '../utils/variableSubstitution';
 
 interface NodeComponentProps {
   node: WorkflowNode;
@@ -322,6 +323,73 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
     }
   };
 
+  const generatePythonCodePreview = (): string => {
+    switch (node.type) {
+      case 'variable':
+        const varName = node.properties.name || 'myVariable';
+        const varValue = node.properties.value || 'hello world';
+        if (hasVariableReferences(varValue)) {
+          return `${varName} = ${toPythonFString(varValue)}`;
+        }
+        else if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varValue)) {
+          return `${varName} = ${varValue}`;
+        }
+        return `${varName} = "${varValue}"`;
+      case 'print':
+        const message = node.properties.message || 'myVariable';
+        if (hasVariableReferences(message)) {
+          return `print(${toPythonFString(message)})`;
+        }
+        else if (message && !message.includes('"') && !message.includes("'") && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(message)) {
+          return `print(${message})`;
+        } else {
+          return `print("${message}")`;
+        }
+      case 'assignment':
+        const assignVar = node.properties.variable || 'result';
+        const expression = node.properties.expression || 'value';
+        return `${assignVar} = ${expression}`;
+      case 'if-then':
+        const condition = node.properties.condition || 'True';
+        return `if ${condition}:`;
+      case 'foreach':
+        const iterable = node.properties.iterable || 'items';
+        const loopVar = node.properties.variable || 'item';
+        return `for ${loopVar} in ${iterable}:`;
+      case 'while':
+        const whileCondition = node.properties.condition || 'True';
+        return `while ${whileCondition}:`;
+      case 'function':
+        const funcName = node.properties.name || 'myFunction';
+        const params = node.properties.parameters || '';
+        return `def ${funcName}(${params}):`;
+      case 'execute':
+        const command = node.properties.command || 'print("Executing...")';
+        return command;
+      case 'list_create':
+        const listName = node.properties.name || 'my_list';
+        const itemsText = node.properties.items || 'apple\norange\npear';
+        const itemsArray = itemsText.split('\n').filter((item: string) => item.trim()).map((item: string) => `"${item.trim()}"`);
+        return `${listName} = [${itemsArray.join(', ')}]`;
+      case 'increment':
+        const incVar = node.properties.variable || 'counter';
+        return `${incVar} = ${incVar} + 1`;
+      case 'pycode':
+        const pyCode = node.properties.code || '# Custom Python code';
+        return pyCode;
+      case 'bash':
+        const bashCommand = node.properties.command || 'echo "Hello"';
+        return `# ${bashCommand}`;
+      default:
+        return '# Configure node properties';
+    }
+  };
+
+  const truncateCode = (code: string, maxLength: number = 35): string => {
+    if (code.length <= maxLength) return code;
+    return code.substring(0, maxLength - 3) + '...';
+  };
+
   const isInputConnected = () => {
     return connections.some(conn => conn.target_node === node.id);
   };
@@ -358,6 +426,12 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
           <div className="node-title-section">
             <div className="node-title">
               {node.type.charAt(0).toUpperCase() + node.type.slice(1).replace('_', ' ')}
+            </div>
+            <div 
+              className="node-code-preview"
+              title={generatePythonCodePreview()}
+            >
+              {truncateCode(generatePythonCodePreview())}
             </div>
           </div>
         </div>

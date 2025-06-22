@@ -49,9 +49,10 @@ const Layout: React.FC<LayoutProps> = ({
           <button 
             className="action-button btn-execute"
             onClick={onExecute}
-            disabled={isExecuting}
+            disabled={true}
+            title="Temporarily disabled"
           >
-            {isExecuting ? 'Running...' : 'Execute'}
+            Execute
           </button>
           <button className="action-button btn-export">Export</button>
         </div>
@@ -65,20 +66,19 @@ const Layout: React.FC<LayoutProps> = ({
       {/* Execution Controls */}
       <div className="execution-controls">
         <button 
-          className={`control-button ${isExecuting ? 'disabled' : ''}`}
-          onClick={onExecute}
-          disabled={isExecuting}
-          title="Run Workflow"
+          className="control-button disabled"
+          disabled={true}
+          title="Temporarily disabled"
         >
           ▶ Run
         </button>
-        <button className="control-button" title="Pause Execution">
+        <button className="control-button disabled" disabled={true} title="Temporarily disabled">
           ⏸ Pause
         </button>
-        <button className="control-button" title="Stop Execution">
+        <button className="control-button disabled" disabled={true} title="Temporarily disabled">
           ⏹ Stop
         </button>
-        <button className="control-button" title="Settings">
+        <button className="control-button disabled" disabled={true} title="Temporarily disabled">
           🔧
         </button>
       </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { WorkflowNode } from '../types';
 import VariablePicker from './VariablePicker';
 
@@ -17,6 +17,15 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
   onClose,
   allNodes
 }) => {
+  const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  // Auto-focus first input when panel opens
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      firstInputRef.current?.focus();
+    }, 100); // Small delay to ensure panel is rendered
+    return () => clearTimeout(timer);
+  }, []);
   const handlePropertyChange = (key: string, value: any) => {
     const updatedNode = {
       ...selectedNode,
@@ -126,13 +135,14 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
     return variableFields[nodeType]?.includes(key) || false;
   };
 
-  const renderPropertyEditor = (key: string, value: any, type: string = 'string') => {
+  const renderPropertyEditor = (key: string, value: any, type: string = 'string', isFirst: boolean = false) => {
     const useVariablePicker = shouldUseVariablePicker(selectedNode.type, key);
     
     switch (type) {
       case 'boolean':
         return (
           <input
+            ref={isFirst ? firstInputRef as React.RefObject<HTMLInputElement> : undefined}
             type="checkbox"
             checked={value || false}
             onChange={(e) => handlePropertyChange(key, e.target.checked)}
@@ -142,6 +152,7 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
       case 'number':
         return (
           <input
+            ref={isFirst ? firstInputRef as React.RefObject<HTMLInputElement> : undefined}
             type="number"
             value={value || ''}
             onChange={(e) => handlePropertyChange(key, parseFloat(e.target.value))}
@@ -163,6 +174,7 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
         }
         return (
           <textarea
+            ref={isFirst ? firstInputRef as React.RefObject<HTMLTextAreaElement> : undefined}
             value={value || ''}
             onChange={(e) => handlePropertyChange(key, e.target.value)}
             className="canvas-property-textarea"
@@ -184,6 +196,7 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
         }
         return (
           <input
+            ref={isFirst ? firstInputRef as React.RefObject<HTMLInputElement> : undefined}
             type="text"
             value={value || ''}
             onChange={(e) => handlePropertyChange(key, e.target.value)}
@@ -221,12 +234,12 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
 
       <div className="canvas-property-content">
         {Object.entries(properties).length > 0 ? (
-          Object.entries(properties).map(([key, config]) => (
+          Object.entries(properties).map(([key, config], index) => (
             <div key={key} className="canvas-property-group">
               <label className="canvas-property-label">
                 {config.label}
               </label>
-              {renderPropertyEditor(key, selectedNode.properties[key], config.type)}
+              {renderPropertyEditor(key, selectedNode.properties[key], config.type, index === 0)}
             </div>
           ))
         ) : (
