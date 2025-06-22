@@ -12,6 +12,7 @@ function App() {
   const [executeCallback, setExecuteCallback] = useState<(() => void) | null>(null);
   const [generateCodeCallback, setGenerateCodeCallback] = useState<(() => string) | null>(null);
   const [saveCallback, setSaveCallback] = useState<(() => void) | null>(null);
+  const [importWorkflowCallback, setImportWorkflowCallback] = useState<((workflowData: any) => void) | null>(null);
 
   const handleConsoleOutput = useCallback((updater: (prev: string[]) => string[]) => {
     setConsoleOutput(updater);
@@ -40,6 +41,12 @@ function App() {
     }
   }, [saveCallback]);
 
+  const handleImportWorkflow = useCallback((workflowData: any) => {
+    if (importWorkflowCallback) {
+      importWorkflowCallback(workflowData);
+    }
+  }, [importWorkflowCallback]);
+
   return (
     <div className="app-container">
       <Router>
@@ -51,6 +58,7 @@ function App() {
           onGenerateCode={handleGenerateCode}
           onSave={handleSave}
           onConsoleOutput={handleConsoleOutput}
+          onImportWorkflow={handleImportWorkflow}
         >
           <Routes>
             <Route 
@@ -62,6 +70,7 @@ function App() {
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
                   onRegisterSave={setSaveCallback}
+                  onRegisterImportWorkflow={setImportWorkflowCallback}
                 />
               } 
             />
@@ -74,6 +83,7 @@ function App() {
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
                   onRegisterSave={setSaveCallback}
+                  onRegisterImportWorkflow={setImportWorkflowCallback}
                 />
               } 
             />

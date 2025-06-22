@@ -13,6 +13,7 @@ interface WorkflowEditorProps {
   onRegisterExecute?: (callback: () => void) => void;
   onRegisterGenerateCode?: (callback: () => string) => void;
   onRegisterSave?: (callback: () => void) => void;
+  onRegisterImportWorkflow?: (callback: (workflowData: any) => void) => void;
 }
 
 const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
@@ -20,7 +21,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   onExecutionState,
   onRegisterExecute,
   onRegisterGenerateCode,
-  onRegisterSave
+  onRegisterSave,
+  onRegisterImportWorkflow
 }) => {
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -484,6 +486,55 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNode, handleDeleteSelectedNode]);
 
+  const handleImportWorkflow = useCallback((workflowData: any) => {
+    try {
+      if (workflowData.nodes && Array.isArray(workflowData.nodes)) {
+        const importedNodes: WorkflowNode[] = workflowData.nodes.map((nodeData: any, index: number) => ({
+          id: nodeData.id || `imported_node_${Date.now()}_${index}`,
+          type: nodeData.type || 'variable',
+          position: {
+            x: 200 + (index * 50), // Offset imported nodes
+            y: 200 + (index * 80)
+          },
+          panelId: 'main-panel', // Import to main panel by default
+          properties: nodeData.params || {},
+          inputs: nodeData.inputs ? nodeData.inputs.map((input: any) => ({
+            id: typeof input === 'string' ? input : input.id || input.name,
+            name: typeof input === 'string' ? input : input.name || input.id,
+            type: typeof input === 'object' ? input.type || 'any' : 'any',
+            required: false
+          })) : [],
+          outputs: nodeData.outputs ? nodeData.outputs.map((output: any) => ({
+            id: typeof output === 'string' ? output : output.id || output.name,
+            name: typeof output === 'string' ? output : output.name || output.id,
+            type: typeof output === 'object' ? output.type || 'any' : 'any'
+          })) : []
+        }));
+
+        setNodes(prev => [...prev, ...importedNodes]);
+
+        // Import connections if provided
+        if (workflowData.connections && Array.isArray(workflowData.connections)) {
+          const importedConnections: Connection[] = workflowData.connections.map((connData: any, index: number) => ({
+            id: `imported_conn_${Date.now()}_${index}`,
+            source_node: connData.from || connData.source_node,
+            source_output: connData.output || connData.source_output,
+            target_node: connData.to || connData.target_node,
+            target_input: connData.input || connData.target_input
+          }));
+
+          setConnections(prev => [...prev, ...importedConnections]);
+        }
+
+        onConsoleOutput?.(prev => [...prev, `✅ Successfully imported ${importedNodes.length} nodes${workflowData.connections ? ` and ${workflowData.connections.length} connections` : ''}`]);
+      } else {
+        onConsoleOutput?.(prev => [...prev, `❌ Invalid workflow data: missing or invalid nodes array`]);
+      }
+    } catch (error) {
+      onConsoleOutput?.(prev => [...prev, `❌ Error importing workflow: ${error instanceof Error ? error.message : 'Unknown error'}`]);
+    }
+  }, [onConsoleOutput]);
+
   const loadWorkflow = useCallback((jsonData: string) => {
     try {
       const workflowData = JSON.parse(jsonData);
@@ -545,7 +596,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onRegisterExecute?.(executeWorkflow);
     onRegisterGenerateCode?.(generatePythonCode);
     onRegisterSave?.(saveWorkflow);
-  }, [onRegisterExecute, onRegisterGenerateCode, onRegisterSave]); // Remove callback dependencies to prevent re-registration
+    onRegisterImportWorkflow?.(handleImportWorkflow);
+  }, [onRegisterExecute, onRegisterGenerateCode, onRegisterSave, onRegisterImportWorkflow, handleImportWorkflow]); // Remove callback dependencies to prevent re-registration
 
   const getDefaultInputs = (type: string) => {
     switch (type) {

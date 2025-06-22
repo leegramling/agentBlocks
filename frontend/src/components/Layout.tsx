@@ -11,6 +11,7 @@ interface LayoutProps {
   onGenerateCode?: () => string;
   onSave?: () => void;
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
+  onImportWorkflow?: (workflowData: any) => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -21,7 +22,8 @@ const Layout: React.FC<LayoutProps> = ({
   onClearConsole,
   onGenerateCode,
   onSave,
-  onConsoleOutput
+  onConsoleOutput,
+  onImportWorkflow
 }) => {
   return (
     <div className="layout">
@@ -89,7 +91,10 @@ const Layout: React.FC<LayoutProps> = ({
       </div>
 
       {/* LLM Query Panel */}
-      <LLMQueryPanel onConsoleOutput={onConsoleOutput} />
+      <LLMQueryPanel 
+        onConsoleOutput={onConsoleOutput} 
+        onImportWorkflow={onImportWorkflow}
+      />
 
       {/* Console Panel */}
       <Console 
