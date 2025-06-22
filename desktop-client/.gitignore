@@ -1,0 +1,77 @@
+# Rust/Cargo generated files
+/target/
+Cargo.lock
+
+# Build artifacts
+/dist/
+/build/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Tauri build outputs
+/src-tauri/target/
+/src-tauri/Cargo.lock
+
+# Frontend build outputs (if using bundled frontend)
+/frontend/dist/
+/frontend/build/
+/frontend/node_modules/
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+
+# Node.js dependencies (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python virtual environment (if any)
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Development databases
+*.sqlite
+*.db
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Bundle analyzer reports
+bundle-report.html
