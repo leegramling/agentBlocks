@@ -43,9 +43,28 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const nodesRef = useRef<WorkflowNode[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
   
-  // Initialize with main panel
+  // Initialize with main panel and try to restore from localStorage
   useEffect(() => {
     if (panels.length === 0) {
+      // Try to restore from localStorage first
+      try {
+        const savedWorkflow = localStorage.getItem('agentblocks_workflow');
+        if (savedWorkflow) {
+          const workflowData = JSON.parse(savedWorkflow);
+          if (workflowData.nodes && workflowData.panels) {
+            setNodes(workflowData.nodes);
+            setConnections(workflowData.connections || []);
+            setPanels(workflowData.panels);
+            setSelectedPanel(workflowData.panels[0]);
+            onConsoleOutput?.(prev => [...prev, `🔄 Restored workflow from browser storage (${workflowData.nodes.length} nodes)`]);
+            return;
+          }
+        }
+      } catch (error) {
+        onConsoleOutput?.(prev => [...prev, `⚠️ Could not restore from storage: ${error}`]);
+      }
+      
+      // If no saved workflow, create default main panel
       const mainPanel: WorkflowPanel = {
         id: 'main-panel',
         name: 'Main',
@@ -58,7 +77,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       setPanels([mainPanel]);
       setSelectedPanel(mainPanel);
     }
-  }, [panels.length]);
+  }, [panels.length, onConsoleOutput]);
   
   // Update refs when state changes
   useEffect(() => {
@@ -329,19 +348,16 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       }
     };
     
-    const jsonString = JSON.stringify(workflowData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    // Just log the save action instead of downloading
+    onConsoleOutput?.(prev => [...prev, `💾 Workflow saved to memory (${currentNodes.length} nodes, ${currentConnections.length} connections, ${panels.length} panels)`]);
     
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `workflow_${Date.now()}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    onConsoleOutput?.(prev => [...prev, `Workflow saved as JSON (${currentNodes.length} nodes, ${currentConnections.length} connections, ${panels.length} panels)`]);
+    // Optional: Store in localStorage for persistence
+    try {
+      localStorage.setItem('agentblocks_workflow', JSON.stringify(workflowData));
+      onConsoleOutput?.(prev => [...prev, `✅ Workflow also saved to browser storage`]);
+    } catch (error) {
+      onConsoleOutput?.(prev => [...prev, `⚠️ Could not save to browser storage: ${error}`]);
+    }
   }, [onConsoleOutput, panels]); // Stable dependencies only
 
   const importWorkflow = useCallback((workflowData: any) => {
