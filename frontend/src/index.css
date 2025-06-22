@@ -686,44 +686,65 @@ body {
 .palette-block {
   background-color: #374151;
   border: 1px solid #4b5563;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
   cursor: pointer;
   transition: all 0.2s;
   user-select: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 40px;
 }
 
 .palette-block:hover {
   background-color: #4b5563;
   border-color: #6b7280;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.palette-block.keyboard-selected {
+  background-color: #3b82f6;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
 }
 
 .block-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  justify-content: center;
+  min-width: 20px;
 }
 
 .block-icon {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .block-mode-indicator {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.3);
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.block-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .block-name {
   color: #ffffff;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  line-height: 1.2;
 }
 
 .block-description {

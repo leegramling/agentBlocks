@@ -205,14 +205,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 <td>Type</td>
                 <td className="value">{selectedNode.type}</td>
               </tr>
-              <tr>
-                <td>Position X</td>
-                <td className="value">{selectedNode.position.x}</td>
-              </tr>
-              <tr>
-                <td>Position Y</td>
-                <td className="value">{selectedNode.position.y}</td>
-              </tr>
               
               {/* Dynamic Properties */}
               {Object.entries(properties).map(([key, config]) => (

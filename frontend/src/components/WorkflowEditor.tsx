@@ -262,6 +262,63 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           const command = node.properties.command || 'print("Executing...")';
           code += `${command}\n`;
           break;
+        // Data structure nodes
+        case 'list_create':
+          const listName = node.properties.name || 'my_list';
+          const listItems = node.properties.items || '[]';
+          code += `${listName} = ${listItems}\n`;
+          break;
+        case 'list_append':
+          const targetList = node.properties.list || 'my_list';
+          const appendItem = node.properties.item || 'item';
+          code += `${targetList}.append(${appendItem})\n`;
+          break;
+        case 'list_get':
+          const getList = node.properties.list || 'my_list';
+          const getIndex = node.properties.index || '0';
+          const getVar = node.properties.variable || 'item';
+          code += `${getVar} = ${getList}[${getIndex}]\n`;
+          break;
+        case 'list_length':
+          const lengthList = node.properties.list || 'my_list';
+          const lengthVar = node.properties.variable || 'length';
+          code += `${lengthVar} = len(${lengthList})\n`;
+          break;
+        case 'list_comprehension':
+          const compVar = node.properties.variable || 'result';
+          const compExpression = node.properties.expression || 'x';
+          const compIterable = node.properties.iterable || 'range(10)';
+          const compCondition = node.properties.condition || '';
+          const condition_part = compCondition ? ` if ${compCondition}` : '';
+          code += `${compVar} = [${compExpression} for x in ${compIterable}${condition_part}]\n`;
+          break;
+        case 'set_create':
+          const setName = node.properties.name || 'my_set';
+          const setItems = node.properties.items || 'set()';
+          code += `${setName} = ${setItems}\n`;
+          break;
+        case 'set_add':
+          const targetSet = node.properties.set || 'my_set';
+          const addItem = node.properties.item || 'item';
+          code += `${targetSet}.add(${addItem})\n`;
+          break;
+        case 'dict_create':
+          const dictName = node.properties.name || 'my_dict';
+          const dictItems = node.properties.items || '{}';
+          code += `${dictName} = ${dictItems}\n`;
+          break;
+        case 'dict_get':
+          const getDict = node.properties.dict || 'my_dict';
+          const getKey = node.properties.key || 'key';
+          const getDictVar = node.properties.variable || 'value';
+          code += `${getDictVar} = ${getDict}[${getKey}]\n`;
+          break;
+        case 'dict_set':
+          const setDict = node.properties.dict || 'my_dict';
+          const setKey = node.properties.key || 'key';
+          const setValue = node.properties.value || 'value';
+          code += `${setDict}[${setKey}] = ${setValue}\n`;
+          break;
       }
     });
     

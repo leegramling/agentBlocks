@@ -300,19 +300,6 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       }}
       onMouseDown={handleMouseDown}
     >
-      {/* Input Connector (Top) - Female (Down Triangle) */}
-      {hasInput() && (
-        <div 
-          className="node-connector input-connector"
-          style={{
-            color: isInputConnected() ? '#10b981' : '#eab308'
-          }}
-          title="Input connector"
-        >
-          ▼
-        </div>
-      )}
-
       <div 
         className={`workflow-node ${selected ? 'selected' : ''}`}
         data-type={node.type}
@@ -328,33 +315,12 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
             <div className="node-title">
               {node.type.charAt(0).toUpperCase() + node.type.slice(1).replace('_', ' ')}
             </div>
-            <div className="node-subtitle">
-              {getNodePropertiesSummary()}
-            </div>
           </div>
-        </div>
-
-        {/* Mode Badge */}
-        <div className="node-mode-badge">
-          {getNodeBlockMode(node.type).toUpperCase()}
         </div>
 
         {/* Execution Status */}
         <div className="execution-status"></div>
       </div>
-
-      {/* Output Connector (Bottom) - Male (Up Triangle) */}
-      {hasOutput() && (
-        <div 
-          className="node-connector output-connector"
-          style={{
-            color: isOutputConnected() ? '#10b981' : '#eab308'
-          }}
-          title="Output connector"
-        >
-          ▲
-        </div>
-      )}
     </div>
   );
 };

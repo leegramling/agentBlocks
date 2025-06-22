@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Position } from '../types';
 
 interface NodePaletteProps {
@@ -18,6 +18,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeMode, setActiveMode] = useState<'simple' | 'advanced'>('simple');
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragStart = (e: React.DragEvent, blockType: string) => {
     e.dataTransfer.setData('blockType', blockType);
@@ -26,6 +28,60 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
   const handleDoubleClick = (blockType: string) => {
     onAddNode(blockType, { x: 100, y: 100 });
   };
+
+  const handleSelectNode = (blockType: string) => {
+    // Add node to the bottom of the selected panel or after current selected node
+    onAddNode(blockType, { x: 100, y: 100 });
+    setSelectedIndex(-1);
+    setSearchTerm('');
+  };
+
+  // Global Tab key listener
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setSelectedIndex(-1);
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Search input keyboard navigation
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (filteredBlocks.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedIndex(prev => Math.min(prev + 1, filteredBlocks.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedIndex(prev => Math.max(prev - 1, -1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0 && filteredBlocks[selectedIndex]) {
+          handleSelectNode(filteredBlocks[selectedIndex].type);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setSearchTerm('');
+        setSelectedIndex(-1);
+        searchInputRef.current?.blur();
+        break;
+    }
+  };
+
+  // Reset selection when search term changes
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [searchTerm, activeCategory, activeMode]);
 
   const blockDefinitions: BlockDefinition[] = [
     // Files Category
@@ -39,6 +95,18 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
     { type: 'print', name: 'Print', description: 'Output text to console', category: 'text', icon: '🖨️', blockMode: 'visual' },
     { type: 'text_transform', name: 'Transform Text', description: 'Modify text content', category: 'text', icon: '🔤', blockMode: 'visual' },
     { type: 'regex_match', name: 'Regex Match', description: 'Pattern matching with regex', category: 'text', icon: '🔍', blockMode: 'visual' },
+    
+    // Data Structures Category
+    { type: 'list_create', name: 'Create List', description: 'Create a new list', category: 'data', icon: '📄', blockMode: 'visual' },
+    { type: 'list_append', name: 'List Append', description: 'Add item to end of list', category: 'data', icon: '➕', blockMode: 'visual' },
+    { type: 'list_get', name: 'List Get', description: 'Get item from list by index', category: 'data', icon: '📇', blockMode: 'visual' },
+    { type: 'list_length', name: 'List Length', description: 'Get length of list', category: 'data', icon: '📏', blockMode: 'visual' },
+    { type: 'list_comprehension', name: 'List Comprehension', description: 'Create list with expression', category: 'data', icon: '🔄', blockMode: 'visual' },
+    { type: 'set_create', name: 'Create Set', description: 'Create a new set', category: 'data', icon: '🔵', blockMode: 'visual' },
+    { type: 'set_add', name: 'Set Add', description: 'Add item to set', category: 'data', icon: '⚪', blockMode: 'visual' },
+    { type: 'dict_create', name: 'Create Dict', description: 'Create a new dictionary', category: 'data', icon: '📚', blockMode: 'visual' },
+    { type: 'dict_get', name: 'Dict Get', description: 'Get value from dictionary', category: 'data', icon: '🔑', blockMode: 'visual' },
+    { type: 'dict_set', name: 'Dict Set', description: 'Set key-value in dictionary', category: 'data', icon: '🏷️', blockMode: 'visual' },
     
     // Network Category
     { type: 'http_request', name: 'HTTP Request', description: 'Make web API calls', category: 'network', icon: '🌐', blockMode: 'visual' },
@@ -66,6 +134,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
     { id: 'all', name: 'All', icon: '📦' },
     { id: 'files', name: 'Files', icon: '📁' },
     { id: 'text', name: 'Text', icon: '📝' },
+    { id: 'data', name: 'Data', icon: '📊' },
     { id: 'network', name: 'Network', icon: '🌐' },
     { id: 'logic', name: 'Logic', icon: '🔀' },
     { id: 'ai', name: 'AI', icon: '🤖' },
@@ -116,10 +185,12 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
       {/* Search */}
       <div className="palette-search">
         <input
+          ref={searchInputRef}
           type="text"
-          placeholder="Search blocks..."
+          placeholder="Search blocks... (Tab to focus)"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
           className="search-input"
         />
       </div>
@@ -141,25 +212,29 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
 
       {/* Block List */}
       <div className="block-list">
-        {filteredBlocks.map(block => (
+        {filteredBlocks.map((block, index) => (
           <div
             key={block.type}
-            className="palette-block"
+            className={`palette-block ${index === selectedIndex ? 'keyboard-selected' : ''}`}
             draggable
             onDragStart={(e) => handleDragStart(e, block.type)}
             onDoubleClick={() => handleDoubleClick(block.type)}
+            onClick={() => setSelectedIndex(index)}
             title={block.description}
+            style={{ position: 'relative' }}
           >
             <div className="block-header">
               <span className="block-icon">{block.icon}</span>
-              <div 
-                className="block-mode-indicator"
-                style={{ backgroundColor: getBlockModeColor(block.blockMode) }}
-                title={`${block.blockMode} block`}
-              />
             </div>
-            <div className="block-name">{block.name}</div>
-            <div className="block-description">{block.description}</div>
+            <div className="block-content">
+              <div className="block-name">{block.name}</div>
+              <div className="block-description">{block.description}</div>
+            </div>
+            <div 
+              className="block-mode-indicator"
+              style={{ backgroundColor: getBlockModeColor(block.blockMode) }}
+              title={`${block.blockMode} block`}
+            />
           </div>
         ))}
       </div>
