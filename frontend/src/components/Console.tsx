@@ -53,7 +53,7 @@ const Console: React.FC<ConsoleProps> = ({
             title="Show Generated Code"
           >
             <FileText size={12} style={{ marginRight: '4px' }} />
-            Code
+            Show Code
           </button>
           <button 
             className="console-button"
