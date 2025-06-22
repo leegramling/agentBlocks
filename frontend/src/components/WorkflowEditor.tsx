@@ -170,22 +170,28 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     const blockType = e.dataTransfer.getData('blockType');
     if (blockType && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      const dropPosition = {
+      const viewportDropPosition = {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top
       };
       
-      // Check if the drop is over any existing panel
+      // Convert viewport coordinates to canvas coordinates (accounting for zoom and pan)
+      const canvasDropPosition = {
+        x: (viewportDropPosition.x - canvasPan.x) / canvasZoom,
+        y: (viewportDropPosition.y - canvasPan.y) / canvasZoom
+      };
+      
+      // Check if the drop is over any existing panel (using canvas coordinates)
       const droppedOnPanel = panels.find(panel => {
         const panelLeft = panel.position.x;
         const panelTop = panel.position.y;
         const panelRight = panelLeft + panel.size.width;
         const panelBottom = panelTop + panel.size.height;
         
-        return dropPosition.x >= panelLeft && 
-               dropPosition.x <= panelRight && 
-               dropPosition.y >= panelTop && 
-               dropPosition.y <= panelBottom;
+        return canvasDropPosition.x >= panelLeft && 
+               canvasDropPosition.x <= panelRight && 
+               canvasDropPosition.y >= panelTop && 
+               canvasDropPosition.y <= panelBottom;
       });
       
       // If dropped on an existing panel, let the panel handle it
@@ -202,29 +208,30 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         name: moduleName,
         type: 'module',
         position: { 
-          x: dropPosition.x - 140, // Center panel on drop position
-          y: dropPosition.y - 30
+          x: canvasDropPosition.x - 140, // Center panel on drop position
+          y: canvasDropPosition.y - 30
         },
         size: { width: 280, height: 120 },
         color: '#8b5cf6',
         isExpanded: true
       };
       
-      // Add the new panel
+      // Add the new panel first
       setPanels(prev => [...prev, newPanel]);
       setSelectedPanel(newPanel);
       
-      // Add the node to the new panel
-      const nodePosition = {
-        x: 16, // Left padding within panel
-        y: 16  // Top padding within panel
-      };
-      
-      handleAddNode(blockType, nodePosition, newPanel.id);
-      
-      onConsoleOutput?.(prev => [...prev, `📦 Created ${moduleName} with ${blockType} node`]);
+      // Add the node to the new panel with a slight delay to ensure panel is created
+      setTimeout(() => {
+        const nodePosition = {
+          x: 16, // Left padding within panel
+          y: 16  // Top padding within panel
+        };
+        
+        handleAddNode(blockType, nodePosition, newPanel.id);
+        onConsoleOutput?.(prev => [...prev, `📦 Created ${moduleName} with ${blockType} node`]);
+      }, 10);
     }
-  }, [handleAddNode, panels, onConsoleOutput]);
+  }, [handleAddNode, panels, onConsoleOutput, canvasPan, canvasZoom]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

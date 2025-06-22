@@ -26,6 +26,24 @@ const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
     }, 100); // Small delay to ensure panel is rendered
     return () => clearTimeout(timer);
   }, []);
+
+  // Handle ESC key to close panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+
+    // Add event listener to document so it works even when inputs are focused
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
   const handlePropertyChange = (key: string, value: any) => {
     const updatedNode = {
       ...selectedNode,
