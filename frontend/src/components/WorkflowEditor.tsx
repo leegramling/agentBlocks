@@ -344,6 +344,58 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onConsoleOutput?.(prev => [...prev, `Workflow saved as JSON (${currentNodes.length} nodes, ${currentConnections.length} connections, ${panels.length} panels)`]);
   }, [onConsoleOutput, panels]); // Stable dependencies only
 
+  const importWorkflow = useCallback((workflowData: any) => {
+    try {
+      if (workflowData.nodes && Array.isArray(workflowData.nodes)) {
+        // Convert imported nodes to ensure they have proper IDs and positions
+        const importedNodes = workflowData.nodes.map((node: any, index: number) => ({
+          id: node.id || `imported-${Date.now()}-${index}`,
+          type: node.type || 'variable',
+          position: node.position || { x: 100 + (index * 30), y: 100 + (index * 150) },
+          properties: node.properties || node.params || {},
+          panelId: 'main-panel'
+        }));
+        
+        setNodes(prev => [...prev, ...importedNodes]);
+        
+        if (workflowData.connections && Array.isArray(workflowData.connections)) {
+          setConnections(prev => [...prev, ...workflowData.connections]);
+        }
+        
+        onConsoleOutput?.(prev => [...prev, `✅ Imported ${importedNodes.length} nodes successfully`]);
+      } else {
+        onConsoleOutput?.(prev => [...prev, `❌ Invalid workflow format - missing nodes array`]);
+      }
+    } catch (error) {
+      onConsoleOutput?.(prev => [...prev, `❌ Error importing workflow: ${error}`]);
+    }
+  }, [onConsoleOutput]);
+
+  // Register callbacks with parent
+  useEffect(() => {
+    if (onRegisterExecute) {
+      onRegisterExecute(executeWorkflow);
+    }
+  }, [executeWorkflow, onRegisterExecute]);
+
+  useEffect(() => {
+    if (onRegisterGenerateCode) {
+      onRegisterGenerateCode(generatePythonCode);
+    }
+  }, [generatePythonCode, onRegisterGenerateCode]);
+
+  useEffect(() => {
+    if (onRegisterSave) {
+      onRegisterSave(saveWorkflow);
+    }
+  }, [saveWorkflow, onRegisterSave]);
+
+  useEffect(() => {
+    if (onRegisterImportWorkflow) {
+      onRegisterImportWorkflow(importWorkflow);
+    }
+  }, [importWorkflow, onRegisterImportWorkflow]);
+
   // Panel management functions
   const handleCreatePanel = useCallback((name: string) => {
     const newPanel: WorkflowPanel = {

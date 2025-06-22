@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Play, Trash2, FileText } from 'lucide-react';
+import CodeModal from './CodeModal';
 
 interface ConsoleProps {
   output: string[];
@@ -16,10 +17,14 @@ const Console: React.FC<ConsoleProps> = ({
   onClear,
   onGenerateCode 
 }) => {
+  const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState('');
+
   const handleShowCode = () => {
     if (onGenerateCode) {
       const code = onGenerateCode();
-      console.log('Generated Code:', code);
+      setGeneratedCode(code);
+      setIsCodeModalOpen(true);
     }
   };
 
@@ -79,6 +84,14 @@ const Console: React.FC<ConsoleProps> = ({
           ))
         )}
       </div>
+
+      {/* Code Modal */}
+      <CodeModal
+        isOpen={isCodeModalOpen}
+        onClose={() => setIsCodeModalOpen(false)}
+        code={generatedCode}
+        title="Generated Python Code"
+      />
     </div>
   );
 };

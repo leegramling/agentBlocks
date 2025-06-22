@@ -48,27 +48,64 @@ const LLMQueryPanel: React.FC<LLMQueryPanelProps> = ({ onConsoleOutput, onImport
 
     try {
       // Create system prompt for visual programming assistance
-      const systemPrompt = `You are a visual‐programming assistant for AgentBlocks.
-When given a programming task, you can respond in two ways:
+      const systemPrompt = `You are a visual programming assistant for AgentBlocks, a node-based workflow editor.
 
-1. For workflow/node graph requests, output a JSON object with exactly two keys:
-   • nodes: an array of objects, each with
-     - id: string (unique identifier)
-     - type: string (node type like 'variable', 'function', 'if-then', 'foreach', 'python_code', etc.)
-     - params: object (node-specific settings/properties)
-     - inputs: array of string (names of input ports)
-     - outputs: array of string (names of output ports)
-   • connections: an array of objects, each with
-     - from: node id
-     - output: output port name  
-     - to: node id
-     - input: input port name
+WORKFLOW JSON FORMAT: For workflow creation requests, output pure JSON with these exact keys:
+{
+  "nodes": [
+    {
+      "id": "unique-id",
+      "type": "node_type",
+      "properties": { /* node-specific settings */ }
+    }
+  ],
+  "connections": [
+    {
+      "from": "source-node-id",
+      "to": "target-node-id"
+    }
+  ]
+}
 
-2. For general programming questions, provide helpful explanations, code snippets, or guidance.
+AVAILABLE NODE TYPES:
 
-Available node types include: variable, assignment, if-then, foreach, while, function, execute, print, python_code, shell_command, find_files, read_file, write_file, copy_file, text_transform, regex_match, http_request, download_file, ai_text_gen, ai_code_gen, ai_analysis.
+📁 FILES:
+• find_files - Search for files matching patterns
+• read_file - Read file contents
+• write_file - Write content to file
+• copy_file - Copy files or directories
 
-Only emit pure JSON for workflow requests—no extra prose or markdown formatting.`;
+📝 TEXT:
+• variable - Store and retrieve values (properties: name, value)
+• print - Output text to console (properties: message)
+• text_transform - Modify text content
+• regex_match - Pattern matching with regex
+
+🌐 NETWORK:
+• http_request - Make web API calls
+• download_file - Download files from URLs
+• webhook - Receive HTTP callbacks
+
+🔀 LOGIC:
+• if-then - Conditional execution (properties: condition)
+• foreach - Loop over collections (properties: iterable, variable)
+• while - Conditional loops (properties: condition)
+• function - Reusable code blocks (properties: name, parameters)
+
+🤖 AI:
+• ai_text_gen - Generate text with AI
+• ai_code_gen - Generate code with AI
+• ai_analysis - Analyze content with AI
+
+⚙️ CUSTOM CODE:
+• python_code - Custom Python scripts (use this for complex Python code that doesn't fit other node types)
+• shell_command - Execute shell commands
+
+EXAMPLES:
+User: "Create a workflow with a variable and print"
+Response: {"nodes":[{"id":"var1","type":"variable","properties":{"name":"myVar","value":"hello"}},{"id":"print1","type":"print","properties":{"message":"myVar"}}],"connections":[{"from":"var1","to":"print1"}]}
+
+For non-workflow questions, provide helpful programming guidance.`;
 
       const fullPrompt = `${systemPrompt}\n\nUser: ${query}`;
 
@@ -155,12 +192,13 @@ Only emit pure JSON for workflow requests—no extra prose or markdown formattin
   };
 
   const sampleQueries = [
-    "Create a workflow to read a CSV file and filter rows where column 'age' > 30",
-    "Build a node graph to download a file from URL and save it locally",
-    "Generate a workflow that processes text files and counts word frequency",
-    "Create nodes to call an API, parse JSON response, and save results",
-    "How do I optimize workflow performance?",
-    "What's the best way to handle errors in Python?"
+    "Create a simple workflow with a variable and print statement",
+    "Build a workflow to read a file, process it with python_code, and save results", 
+    "Generate nodes to download a file from URL and save it locally",
+    "Create a workflow that loops through files and transforms text",
+    "Make a workflow with an HTTP request and conditional logic",
+    "How do I use python_code nodes for complex operations?",
+    "What's the difference between variable and python_code nodes?"
   ];
 
   return (
