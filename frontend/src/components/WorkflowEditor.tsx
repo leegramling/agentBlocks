@@ -6,6 +6,7 @@ import NodePalette from './NodePalette';
 import PropertiesPanel, { type PropertiesPanelRef } from './PropertiesPanel';
 import PanelComponent from './PanelComponent';
 import PanelModal from './PanelModal';
+import CanvasPropertyPanel from './CanvasPropertyPanel';
 
 interface WorkflowEditorProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
@@ -42,6 +43,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [showPropertiesPanel, setShowPropertiesPanel] = useState(true);
+  const [showCanvasPropertyPanel, setShowCanvasPropertyPanel] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const propertiesPanelRef = useRef<PropertiesPanelRef>(null);
@@ -181,21 +184,27 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const getDefaultProperties = (type: string): Record<string, any> => {
     switch (type) {
       case 'variable':
-        return { name: 'myVariable', value: 'hello world' };
+        return { name: 'counter', value: '0' };
       case 'print':
-        return { message: 'myVariable' };
+        return { message: 'f"{counter}. {fruit}"' };
       case 'assignment':
         return { variable: 'result', expression: 'value' };
       case 'if-then':
         return { condition: 'variable == "hello world"' };
       case 'foreach':
-        return { iterable: 'items', variable: 'item' };
+        return { iterable: 'fruits', variable: 'fruit' };
       case 'while':
         return { condition: 'counter < 10' };
       case 'function':
         return { name: 'myFunction', parameters: 'param1, param2' };
       case 'execute':
         return { command: 'print("Executing...")' };
+      case 'increment':
+        return { variable: 'counter' };
+      case 'list_create':
+        return { name: 'fruits', items: 'apple\norange\npear' };
+      case 'pycode':
+        return { code: '# Custom Python code\nprint("Hello from pycode!")' };
       default:
         return {};
     }
@@ -224,117 +233,164 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     
     let code = '# Generated Python Code\n';
     
-    // Sort nodes by their vertical position to maintain execution order
-    const sortedNodes = [...nodeList].sort((a, b) => a.position.y - b.position.y);
-    
-    sortedNodes.forEach(node => {
+    // Helper function to generate code for a single node with proper indentation
+    const generateNodeCode = (node: WorkflowNode, indentLevel: number = 0): string => {
+      const indent = '    '.repeat(indentLevel);
+      
       switch (node.type) {
         case 'variable':
           const varName = node.properties.name || 'myVariable';
           const varValue = node.properties.value || 'hello world';
-          code += `${varName} = "${varValue}"\n`;
-          break;
+          return `${indent}${varName} = "${varValue}"\n`;
         case 'print':
           const message = node.properties.message || 'myVariable';
           // If message is just a variable name (no quotes), use it directly
           if (message && !message.includes('"') && !message.includes("'") && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(message)) {
-            code += `print(${message})\n`;
+            return `${indent}print(${message})\n`;
           } else {
-            code += `print("${message}")\n`;
+            return `${indent}print("${message}")\n`;
           }
-          break;
         case 'assignment':
           const assignVar = node.properties.variable || 'result';
           const expression = node.properties.expression || 'value';
-          code += `${assignVar} = ${expression}\n`;
-          break;
+          return `${indent}${assignVar} = ${expression}\n`;
         case 'if-then':
           const condition = node.properties.condition || 'True';
-          code += `if ${condition}:\n    pass  # Add code here\n`;
-          break;
+          let ifCode = `${indent}if ${condition}:\n`;
+          const ifChildren = getChildNodes(node.id);
+          if (ifChildren.length > 0) {
+            ifChildren.forEach(child => {
+              ifCode += generateNodeCode(child, indentLevel + 1);
+            });
+          } else {
+            ifCode += `${indent}    pass  # Add code here\n`;
+          }
+          return ifCode;
         case 'foreach':
           const iterable = node.properties.iterable || 'items';
           const loopVar = node.properties.variable || 'item';
-          code += `for ${loopVar} in ${iterable}:\n    pass  # Add code here\n`;
-          break;
+          let forCode = `${indent}for ${loopVar} in ${iterable}:\n`;
+          const forChildren = getChildNodes(node.id);
+          if (forChildren.length > 0) {
+            forChildren.forEach(child => {
+              forCode += generateNodeCode(child, indentLevel + 1);
+            });
+          } else {
+            forCode += `${indent}    pass  # Add code here\n`;
+          }
+          return forCode;
         case 'while':
           const whileCondition = node.properties.condition || 'True';
-          code += `while ${whileCondition}:\n    pass  # Add code here\n`;
-          break;
+          let whileCode = `${indent}while ${whileCondition}:\n`;
+          const whileChildren = getChildNodes(node.id);
+          if (whileChildren.length > 0) {
+            whileChildren.forEach(child => {
+              whileCode += generateNodeCode(child, indentLevel + 1);
+            });
+          } else {
+            whileCode += `${indent}    pass  # Add code here\n`;
+          }
+          return whileCode;
         case 'function':
           const funcName = node.properties.name || 'myFunction';
           const params = node.properties.parameters || '';
-          code += `def ${funcName}(${params}):\n    pass  # Add code here\n`;
-          break;
+          let funcCode = `${indent}def ${funcName}(${params}):\n`;
+          const funcChildren = getChildNodes(node.id);
+          if (funcChildren.length > 0) {
+            funcChildren.forEach(child => {
+              funcCode += generateNodeCode(child, indentLevel + 1);
+            });
+          } else {
+            funcCode += `${indent}    pass  # Add code here\n`;
+          }
+          return funcCode;
         case 'execute':
           const command = node.properties.command || 'print("Executing...")';
-          code += `${command}\n`;
-          break;
-        // Data structure nodes
+          return `${indent}${command}\n`;
         case 'list_create':
           const listName = node.properties.name || 'my_list';
-          const listItems = node.properties.items || '[]';
-          code += `${listName} = ${listItems}\n`;
-          break;
+          const itemsText = node.properties.items || 'apple\norange\npear';
+          const itemsArray = itemsText.split('\n').filter(item => item.trim()).map(item => `"${item.trim()}"`);
+          return `${indent}${listName} = [${itemsArray.join(', ')}]\n`;
         case 'list_append':
           const targetList = node.properties.list || 'my_list';
           const appendItem = node.properties.item || 'item';
-          code += `${targetList}.append(${appendItem})\n`;
-          break;
+          return `${indent}${targetList}.append(${appendItem})\n`;
         case 'list_get':
           const getList = node.properties.list || 'my_list';
           const getIndex = node.properties.index || '0';
           const getVar = node.properties.variable || 'item';
-          code += `${getVar} = ${getList}[${getIndex}]\n`;
-          break;
+          return `${indent}${getVar} = ${getList}[${getIndex}]\n`;
         case 'list_length':
           const lengthList = node.properties.list || 'my_list';
           const lengthVar = node.properties.variable || 'length';
-          code += `${lengthVar} = len(${lengthList})\n`;
-          break;
+          return `${indent}${lengthVar} = len(${lengthList})\n`;
         case 'list_comprehension':
           const compVar = node.properties.variable || 'result';
           const compExpression = node.properties.expression || 'x';
           const compIterable = node.properties.iterable || 'range(10)';
           const compCondition = node.properties.condition || '';
           const condition_part = compCondition ? ` if ${compCondition}` : '';
-          code += `${compVar} = [${compExpression} for x in ${compIterable}${condition_part}]\n`;
-          break;
+          return `${indent}${compVar} = [${compExpression} for x in ${compIterable}${condition_part}]\n`;
         case 'set_create':
           const setName = node.properties.name || 'my_set';
           const setItems = node.properties.items || 'set()';
-          code += `${setName} = ${setItems}\n`;
-          break;
+          return `${indent}${setName} = ${setItems}\n`;
         case 'set_add':
           const targetSet = node.properties.set || 'my_set';
           const addItem = node.properties.item || 'item';
-          code += `${targetSet}.add(${addItem})\n`;
-          break;
+          return `${indent}${targetSet}.add(${addItem})\n`;
         case 'dict_create':
           const dictName = node.properties.name || 'my_dict';
           const dictItems = node.properties.items || '{}';
-          code += `${dictName} = ${dictItems}\n`;
-          break;
+          return `${indent}${dictName} = ${dictItems}\n`;
         case 'dict_get':
           const getDict = node.properties.dict || 'my_dict';
           const getKey = node.properties.key || 'key';
           const getDictVar = node.properties.variable || 'value';
-          code += `${getDictVar} = ${getDict}[${getKey}]\n`;
-          break;
+          return `${indent}${getDictVar} = ${getDict}[${getKey}]\n`;
         case 'dict_set':
           const setDict = node.properties.dict || 'my_dict';
           const setKey = node.properties.key || 'key';
           const setValue = node.properties.value || 'value';
-          code += `${setDict}[${setKey}] = ${setValue}\n`;
-          break;
+          return `${indent}${setDict}[${setKey}] = ${setValue}\n`;
+        case 'increment':
+          const incVar = node.properties.variable || 'counter';
+          return `${indent}${incVar} = ${incVar} + 1\n`;
+        case 'pycode':
+          const pyCode = node.properties.code || '# Custom Python code';
+          return `${indent}${pyCode}\n`;
+        default:
+          return '';
       }
+    };
+    
+    // Helper function to get child nodes of a parent
+    const getChildNodes = (parentId: string): WorkflowNode[] => {
+      return nodeList
+        .filter(node => node.parentId === parentId)
+        .sort((a, b) => a.position.y - b.position.y);
+    };
+    
+    // Get all top-level nodes (nodes without parents)
+    const topLevelNodes = nodeList
+      .filter(node => !node.parentId)
+      .sort((a, b) => a.position.y - b.position.y);
+    
+    // Generate code for all top-level nodes
+    topLevelNodes.forEach(node => {
+      code += generateNodeCode(node, 0);
     });
     
     return code;
   }, []);
 
   const generatePythonCode = useCallback(() => {
-    return generatePythonCodeFromNodes(nodes);
+    console.log('generatePythonCode called, nodes count:', nodes.length);
+    console.log('nodes:', nodes);
+    const result = generatePythonCodeFromNodes(nodes);
+    console.log('generatePythonCode result:', result);
+    return result;
   }, [nodes, generatePythonCodeFromNodes]);
 
   const executeWorkflow = useCallback(async () => {
@@ -459,7 +515,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   }, [executeWorkflow, onRegisterExecute]);
 
   useEffect(() => {
+    console.log('WorkflowEditor: Registering generatePythonCode callback, onRegisterGenerateCode available:', !!onRegisterGenerateCode);
     if (onRegisterGenerateCode) {
+      console.log('WorkflowEditor: Calling onRegisterGenerateCode with generatePythonCode function');
       onRegisterGenerateCode(generatePythonCode);
     }
   }, [generatePythonCode, onRegisterGenerateCode]);
@@ -496,6 +554,125 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     setSelectedPanel(panel);
     setSelectedNode(null);
   }, []);
+
+  const handleParentNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    // Find all nodes in the same panel
+    const panelNodes = nodes.filter(n => n.panelId === node.panelId);
+    // Sort by vertical position
+    const sortedNodes = panelNodes.sort((a, b) => a.position.y - b.position.y);
+    
+    const currentIndex = sortedNodes.findIndex(n => n.id === nodeId);
+    if (currentIndex <= 0) return; // Can't parent the first node
+    
+    // Find the previous node that can be a parent (foreach, if-then, while, function)
+    let parentIndex = currentIndex - 1;
+    let potentialParent = sortedNodes[parentIndex];
+    
+    // Find a suitable parent (a control structure node)
+    while (parentIndex >= 0 && !['foreach', 'if-then', 'while', 'function'].includes(potentialParent.type)) {
+      parentIndex--;
+      if (parentIndex >= 0) {
+        potentialParent = sortedNodes[parentIndex];
+      }
+    }
+    
+    if (parentIndex < 0) return; // No suitable parent found
+    
+    setNodes(prev => prev.map(n => {
+      if (n.id === nodeId) {
+        return {
+          ...n,
+          parentId: potentialParent.id,
+          indentLevel: (potentialParent.indentLevel || 0) + 1
+        };
+      }
+      if (n.id === potentialParent.id) {
+        const currentChildren = n.children || [];
+        return {
+          ...n,
+          children: [...currentChildren, nodeId]
+        };
+      }
+      return n;
+    }));
+  }, [nodes]);
+
+  const handleUnparentNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node || !node.parentId) return;
+
+    setNodes(prev => prev.map(n => {
+      if (n.id === nodeId) {
+        return {
+          ...n,
+          parentId: undefined,
+          indentLevel: 0
+        };
+      }
+      if (n.id === node.parentId) {
+        const currentChildren = n.children || [];
+        return {
+          ...n,
+          children: currentChildren.filter(childId => childId !== nodeId)
+        };
+      }
+      return n;
+    }));
+  }, [nodes]);
+
+  const handleReorderNode = useCallback((draggedNodeId: string, targetNodeId: string, insertBefore: boolean) => {
+    const draggedNode = nodes.find(n => n.id === draggedNodeId);
+    const targetNode = nodes.find(n => n.id === targetNodeId);
+    
+    if (!draggedNode || !targetNode || draggedNode.panelId !== targetNode.panelId) {
+      return; // Only allow reordering within the same panel
+    }
+    
+    // Get all nodes in the same panel, sorted by position
+    const panelNodes = nodes
+      .filter(n => n.panelId === draggedNode.panelId)
+      .sort((a, b) => a.position.y - b.position.y);
+    
+    // Find the target position in the sorted list
+    const targetIndex = panelNodes.findIndex(n => n.id === targetNodeId);
+    const draggedIndex = panelNodes.findIndex(n => n.id === draggedNodeId);
+    
+    if (targetIndex === -1 || draggedIndex === -1) return;
+    
+    // Calculate new Y positions
+    const spacing = 80; // Space between nodes
+    const startY = panelNodes[0].position.y;
+    
+    setNodes(prev => prev.map(node => {
+      if (node.panelId !== draggedNode.panelId) return node;
+      
+      // Create new order array
+      const newOrder = [...panelNodes];
+      newOrder.splice(draggedIndex, 1); // Remove dragged node
+      
+      // Insert at new position
+      const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+      const adjustedIndex = insertIndex > draggedIndex ? insertIndex - 1 : insertIndex;
+      newOrder.splice(adjustedIndex, 0, draggedNode);
+      
+      // Find this node's new position in the reordered array
+      const nodeIndexInNewOrder = newOrder.findIndex(n => n.id === node.id);
+      if (nodeIndexInNewOrder >= 0) {
+        return {
+          ...node,
+          position: {
+            ...node.position,
+            y: startY + (nodeIndexInNewOrder * spacing)
+          }
+        };
+      }
+      
+      return node;
+    }));
+  }, [nodes]);
 
   const handlePanelDrag = useCallback((panelId: string, newPosition: Position) => {
     const panel = panels.find(p => p.id === panelId);
@@ -685,12 +862,19 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       } else if (e.key === ' ' && !e.repeat && !isTyping) {
         e.preventDefault();
         handleRecenterCanvas();
+      } else if (e.key === 'Tab' && selectedNode && !isTyping) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleUnparentNode(selectedNode.id);
+        } else {
+          handleParentNode(selectedNode.id);
+        }
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, handleDeleteSelectedNode, handleRecenterCanvas]);
+  }, [selectedNode, handleDeleteSelectedNode, handleRecenterCanvas, handleParentNode, handleUnparentNode]);
 
   const handleImportWorkflow = useCallback((workflowData: any) => {
     try {
@@ -839,6 +1023,95 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       };
     }
   }, [isPanning, handleCanvasMouseMove, handleCanvasMouseUp]);
+
+  // Add keyboard event listener for 'f' key to toggle right properties panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F') {
+        // Only toggle if not typing in an input field
+        const activeElement = document.activeElement;
+        const isInputFocused = activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.getAttribute('contenteditable') === 'true'
+        );
+        
+        if (!isInputFocused) {
+          e.preventDefault();
+          setShowPropertiesPanel(prev => !prev);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Add keyboard event listener for 'p' key to toggle canvas property panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'p' || e.key === 'P') {
+        // Only toggle if not typing in an input field
+        const activeElement = document.activeElement;
+        const isInputFocused = activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.getAttribute('contenteditable') === 'true'
+        );
+        
+        if (!isInputFocused && selectedNode) {
+          e.preventDefault();
+          setShowCanvasPropertyPanel(prev => !prev);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedNode]);
+
+  // Add keyboard event listener for tab/shift-tab to handle node parenting
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        // Only handle if not typing in an input field
+        const activeElement = document.activeElement;
+        const isInputFocused = activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.getAttribute('contenteditable') === 'true'
+        );
+        
+        if (!isInputFocused && selectedNode) {
+          e.preventDefault();
+          
+          if (e.shiftKey) {
+            // Shift+Tab: Unparent node (move up one level)
+            handleUnparentNode(selectedNode.id);
+          } else {
+            // Tab: Parent node (make it child of previous node)
+            handleParentNode(selectedNode.id);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedNode, nodes]);
+
+  // Close canvas property panel when node is deselected
+  useEffect(() => {
+    if (!selectedNode && showCanvasPropertyPanel) {
+      setShowCanvasPropertyPanel(false);
+    }
+  }, [selectedNode, showCanvasPropertyPanel]);
 
   // Register callbacks with parent (stable callbacks)
   useEffect(() => {
@@ -1016,6 +1289,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                   onCompleteConnection={handleCompleteConnection}
                   connecting={connecting}
                   connections={connections}
+                  onReorderNode={handleReorderNode}
                 />
               );
             })}
@@ -1213,20 +1487,63 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         onClose={() => setShowPanelModal(false)}
       />
 
-      {/* Right Panel - Properties */}
-      <PropertiesPanel 
-        ref={propertiesPanelRef}
-        selectedNode={selectedNode}
-        selectedPanel={selectedPanel}
-        nodes={nodes}
-        panels={panels}
-        onUpdateNode={(node) => {
-          setNodes(prev => prev.map(n => n.id === node.id ? node : n));
-          setSelectedNode(node);
-        }}
-        onNodeSelect={handleNodeSelect}
-        onPanelSelect={handlePanelSelect}
-      />
+      {/* Canvas Property Panel (conditionally rendered) */}
+      {showCanvasPropertyPanel && selectedNode && (() => {
+        // Find the panel that contains the selected node
+        const nodePanel = panels.find(p => p.id === selectedNode.panelId);
+        if (!nodePanel) return null;
+        
+        // Calculate position to avoid overlapping with main panel
+        // First try to position to the right of the node's panel
+        let panelPosition = {
+          x: nodePanel.position.x + nodePanel.size.width + 20,
+          y: nodePanel.position.y
+        };
+        
+        // Check if this would overlap with any other panels
+        const propertyPanelWidth = 320; // Width of canvas property panel
+        const canvasWidth = 1200; // Approximate canvas width
+        
+        // If positioning to the right would go off screen or overlap, try left side
+        if (panelPosition.x + propertyPanelWidth > canvasWidth) {
+          panelPosition.x = nodePanel.position.x - propertyPanelWidth - 20;
+          
+          // If left side would also go off screen, position it above/below
+          if (panelPosition.x < 0) {
+            panelPosition.x = nodePanel.position.x;
+            panelPosition.y = nodePanel.position.y + nodePanel.size.height + 20;
+          }
+        }
+        
+        return (
+          <CanvasPropertyPanel
+            selectedNode={selectedNode}
+            position={panelPosition}
+            onUpdateNode={(node) => {
+              setNodes(prev => prev.map(n => n.id === node.id ? node : n));
+              setSelectedNode(node);
+            }}
+            onClose={() => setShowCanvasPropertyPanel(false)}
+          />
+        );
+      })()}
+
+      {/* Right Panel - Properties (conditionally rendered) */}
+      {showPropertiesPanel && (
+        <PropertiesPanel 
+          ref={propertiesPanelRef}
+          selectedNode={selectedNode}
+          selectedPanel={selectedPanel}
+          nodes={nodes}
+          panels={panels}
+          onUpdateNode={(node) => {
+            setNodes(prev => prev.map(n => n.id === node.id ? node : n));
+            setSelectedNode(node);
+          }}
+          onNodeSelect={handleNodeSelect}
+          onPanelSelect={handlePanelSelect}
+        />
+      )}
     </div>
   );
 };

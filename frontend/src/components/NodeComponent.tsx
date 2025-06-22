@@ -10,6 +10,7 @@ interface NodeComponentProps {
   onCompleteConnection: (nodeId: string, inputId: string) => void;
   connecting: { nodeId: string; outputId: string } | null;
   connections: Connection[];
+  onReorderNode?: (draggedNodeId: string, targetNodeId: string, insertBefore: boolean) => void;
 }
 
 const NodeComponent: React.FC<NodeComponentProps> = ({
@@ -20,10 +21,12 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
   onStartConnection,
   onCompleteConnection,
   connecting,
-  connections
+  connections,
+  onReorderNode
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
+  const [isDropTarget, setIsDropTarget] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
 
   const getNodeIcon = (type: string) => {
@@ -47,7 +50,10 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       while: '⭕',
       function: '🔧',
       execute: '▶️',
-      print: '🖨️'
+      print: '🖨️',
+      increment: '➕',
+      list_create: '📄',
+      pycode: '📝'
     };
     return icons[type] || '📦';
   };
@@ -73,7 +79,10 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       while: '#ec4899',
       function: '#3b82f6',
       execute: '#ef4444',
-      print: '#10b981'
+      print: '#10b981',
+      increment: '#f59e0b',
+      list_create: '#06b6d4',
+      pycode: '#8b5cf6'
     };
     return colors[type] || '#6b7280';
   };
@@ -110,12 +119,30 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
         };
         onDrag(node.id, newPosition);
       }
+      
+      // Check if we're hovering over another node for reordering feedback
+      const elementsUnderMouse = document.elementsFromPoint(e.clientX, e.clientY);
+      const hoverNodeElement = elementsUnderMouse.find(el => 
+        el.classList.contains('workflow-node') && 
+        el.getAttribute('data-type') !== node.type
+      );
+      
+      // Update all nodes' drop target state
+      document.querySelectorAll('[data-node-id]').forEach(el => {
+        const nodeEl = el as HTMLElement;
+        const isCurrentHover = nodeEl === hoverNodeElement?.closest('[data-node-id]');
+        const nodeId = nodeEl.getAttribute('data-node-id');
+        
+        if (nodeId && nodeId !== node.id && onReorderNode) {
+          nodeEl.classList.toggle('drop-target', isCurrentHover);
+        }
+      });
     }
   };
 
   const handleMouseUp = (e: MouseEvent) => {
     if (isDragging) {
-      // Check if we're dropping on top of another node for auto-connection
+      // Check if we're dropping on top of another node for reordering or auto-connection
       const elementsUnderMouse = document.elementsFromPoint(e.clientX, e.clientY);
       const targetNodeElement = elementsUnderMouse.find(el => 
         el.classList.contains('workflow-node') && 
@@ -125,13 +152,30 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       if (targetNodeElement) {
         const targetNodeId = targetNodeElement.closest('[data-node-id]')?.getAttribute('data-node-id');
         if (targetNodeId && targetNodeId !== node.id) {
-          // Auto-connect: current node output to target node input
-          if (hasOutput()) {
+          
+          // Check if we should reorder (both nodes in same panel)
+          const targetNodeRect = targetNodeElement.getBoundingClientRect();
+          const draggedNodeRect = nodeRef.current?.getBoundingClientRect();
+          
+          if (onReorderNode && draggedNodeRect) {
+            // Determine if we should insert before or after based on mouse position
+            const mouseY = e.clientY;
+            const targetCenterY = targetNodeRect.top + targetNodeRect.height / 2;
+            const insertBefore = mouseY < targetCenterY;
+            
+            onReorderNode(node.id, targetNodeId, insertBefore);
+          } else if (hasOutput()) {
+            // Auto-connect: current node output to target node input
             onStartConnection(node.id, 'output');
             setTimeout(() => onCompleteConnection(targetNodeId, 'input'), 50);
           }
         }
       }
+      
+      // Clean up drop target indicators
+      document.querySelectorAll('[data-node-id]').forEach(el => {
+        el.classList.remove('drop-target');
+      });
     }
     setIsDragging(false);
   };
