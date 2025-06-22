@@ -1,0 +1,190 @@
+import React from 'react';
+import type { WorkflowNode } from '../types';
+
+interface CanvasPropertyPanelProps {
+  selectedNode: WorkflowNode;
+  position: { x: number; y: number };
+  onUpdateNode: (node: WorkflowNode) => void;
+  onClose: () => void;
+}
+
+const CanvasPropertyPanel: React.FC<CanvasPropertyPanelProps> = ({
+  selectedNode,
+  position,
+  onUpdateNode,
+  onClose
+}) => {
+  const handlePropertyChange = (key: string, value: any) => {
+    const updatedNode = {
+      ...selectedNode,
+      properties: {
+        ...selectedNode.properties,
+        [key]: value
+      }
+    };
+    onUpdateNode(updatedNode);
+  };
+
+  const getNodeProperties = (node: WorkflowNode) => {
+    switch (node.type) {
+      case 'variable':
+        return {
+          name: { type: 'string', label: 'Variable Name' },
+          value: { type: 'string', label: 'Value' }
+        };
+      case 'print':
+        return {
+          message: { type: 'string', label: 'Message to Print' }
+        };
+      case 'assignment':
+        return {
+          variable: { type: 'string', label: 'Variable Name' },
+          expression: { type: 'string', label: 'Expression' }
+        };
+      case 'if-then':
+        return {
+          condition: { type: 'string', label: 'Condition' }
+        };
+      case 'foreach':
+        return {
+          iterable: { type: 'string', label: 'Iterable' },
+          variable: { type: 'string', label: 'Loop Variable' }
+        };
+      case 'while':
+        return {
+          condition: { type: 'string', label: 'Condition' }
+        };
+      case 'function':
+        return {
+          name: { type: 'string', label: 'Function Name' },
+          parameters: { type: 'string', label: 'Parameters' }
+        };
+      case 'execute':
+        return {
+          command: { type: 'string', label: 'Command to Execute' }
+        };
+      case 'increment':
+        return {
+          variable: { type: 'string', label: 'Variable Name' }
+        };
+      case 'list_create':
+        return {
+          name: { type: 'string', label: 'List Variable Name' },
+          items: { type: 'textarea', label: 'Items (one per line)' }
+        };
+      case 'pycode':
+        return {
+          code: { type: 'textarea', label: 'Python Code' }
+        };
+      case 'bash':
+        return {
+          command: { type: 'textarea', label: 'Command' },
+          workingDir: { type: 'string', label: 'Working Directory' },
+          timeout: { type: 'number', label: 'Timeout (seconds)' }
+        };
+      case 'regex':
+        return {
+          pattern: { type: 'string', label: 'Regex Pattern' },
+          flags: { type: 'string', label: 'Flags (g, i, m)' },
+          global: { type: 'boolean', label: 'Global Match' }
+        };
+      case 'curl':
+        return {
+          url: { type: 'string', label: 'URL' },
+          method: { type: 'string', label: 'HTTP Method' },
+          headers: { type: 'textarea', label: 'Headers (JSON)' },
+          timeout: { type: 'number', label: 'Timeout (seconds)' }
+        };
+      default:
+        return {};
+    }
+  };
+
+  const renderPropertyEditor = (key: string, value: any, type: string = 'string') => {
+    switch (type) {
+      case 'boolean':
+        return (
+          <input
+            type="checkbox"
+            checked={value || false}
+            onChange={(e) => handlePropertyChange(key, e.target.checked)}
+            className="canvas-property-checkbox"
+          />
+        );
+      case 'number':
+        return (
+          <input
+            type="number"
+            value={value || ''}
+            onChange={(e) => handlePropertyChange(key, parseFloat(e.target.value))}
+            className="canvas-property-input"
+          />
+        );
+      case 'textarea':
+        return (
+          <textarea
+            value={value || ''}
+            onChange={(e) => handlePropertyChange(key, e.target.value)}
+            className="canvas-property-textarea"
+            rows={3}
+          />
+        );
+      default:
+        return (
+          <input
+            type="text"
+            value={value || ''}
+            onChange={(e) => handlePropertyChange(key, e.target.value)}
+            className="canvas-property-input"
+          />
+        );
+    }
+  };
+
+  const properties = getNodeProperties(selectedNode);
+
+  return (
+    <div 
+      className="canvas-property-panel"
+      style={{
+        position: 'absolute',
+        left: position.x,
+        top: position.y,
+        zIndex: 1000
+      }}
+    >
+      <div className="canvas-property-header">
+        <div className="canvas-property-title">
+          <span className="canvas-property-icon">⚙️</span>
+          <span>Edit {selectedNode.type.charAt(0).toUpperCase() + selectedNode.type.slice(1)}</span>
+        </div>
+        <button 
+          className="canvas-property-close"
+          onClick={onClose}
+          title="Close (P)"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="canvas-property-content">
+        {Object.entries(properties).length > 0 ? (
+          Object.entries(properties).map(([key, config]) => (
+            <div key={key} className="canvas-property-group">
+              <label className="canvas-property-label">
+                {config.label}
+              </label>
+              {renderPropertyEditor(key, selectedNode.properties[key], config.type)}
+            </div>
+          ))
+        ) : (
+          <div className="canvas-property-empty">
+            No configurable properties for this node type
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default CanvasPropertyPanel;

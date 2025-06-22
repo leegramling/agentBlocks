@@ -36,10 +36,10 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
     setSearchTerm('');
   };
 
-  // Global Tab key listener for cycling focus
+  // Global F2 key listener for cycling focus between search and canvas
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === 'F2') {
         e.preventDefault();
         
         // If search field is focused, blur it (return to canvas)
@@ -98,6 +98,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
     { type: 'print', name: 'Print', description: 'Output text to console', category: 'text', icon: '🖨️', blockMode: 'visual' },
     { type: 'text_transform', name: 'Transform Text', description: 'Modify text content', category: 'text', icon: '🔤', blockMode: 'visual' },
     { type: 'regex_match', name: 'Regex Match', description: 'Pattern matching with regex', category: 'text', icon: '🔍', blockMode: 'visual' },
+    { type: 'increment', name: 'Increment', description: 'Add 1 to a variable', category: 'text', icon: '➕', blockMode: 'visual' },
     
     // Data Structures Category
     { type: 'list_create', name: 'Create List', description: 'Create a new list', category: 'data', icon: '📄', blockMode: 'visual' },
@@ -129,6 +130,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
     
     // Custom Category
     { type: 'python_code', name: 'Python Code', description: 'Custom Python scripts', category: 'custom', icon: '🐍', blockMode: 'code' },
+    { type: 'pycode', name: 'Python Code Block', description: 'Custom Python code with textarea', category: 'custom', icon: '📝', blockMode: 'code' },
     { type: 'shell_command', name: 'Shell Command', description: 'Execute shell commands', category: 'custom', icon: '💻', blockMode: 'code' },
     { type: 'hybrid_template', name: 'Template', description: 'Hybrid code template', category: 'custom', icon: '📄', blockMode: 'hybrid' },
   ];

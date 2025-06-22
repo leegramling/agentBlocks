@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Save } from 'lucide-react';
 
 interface CodeModalProps {
@@ -14,6 +14,8 @@ const CodeModal: React.FC<CodeModalProps> = ({
   code, 
   title = "Generated Python Code" 
 }) => {
+  const [filename, setFilename] = useState('generated_workflow.py');
+  
   if (!isOpen) return null;
 
   const handleSaveCode = () => {
@@ -21,7 +23,7 @@ const CodeModal: React.FC<CodeModalProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'generated_workflow.py';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -34,6 +36,15 @@ const CodeModal: React.FC<CodeModalProps> = ({
         {/* Modal Header */}
         <div className="code-modal-header">
           <h3 className="code-modal-title">{title}</h3>
+          <div className="filename-input-container">
+            <input
+              type="text"
+              value={filename}
+              onChange={(e) => setFilename(e.target.value)}
+              className="filename-input"
+              placeholder="Enter filename..."
+            />
+          </div>
           <div className="code-modal-actions">
             <button 
               className="code-action-button"

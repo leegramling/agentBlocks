@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import WorkflowEditor from './components/WorkflowEditor';
 import BlockEditor from './components/BlockEditor';
@@ -9,11 +9,28 @@ function App() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [nodeCount, setNodeCount] = useState(0);
   
-  // These will be passed to and managed by WorkflowEditor
-  const [executeCallback, setExecuteCallback] = useState<(() => void) | null>(null);
-  const [generateCodeCallback, setGenerateCodeCallback] = useState<(() => string) | null>(null);
-  const [saveCallback, setSaveCallback] = useState<(() => void) | null>(null);
-  const [importWorkflowCallback, setImportWorkflowCallback] = useState<((workflowData: any) => void) | null>(null);
+  // These will be passed to and managed by WorkflowEditor - using refs for stable function references
+  const executeCallbackRef = useRef<(() => void) | null>(null);
+  const generateCodeCallbackRef = useRef<(() => string) | null>(null);
+  const saveCallbackRef = useRef<(() => void) | null>(null);
+  const importWorkflowCallbackRef = useRef<((workflowData: any) => void) | null>(null);
+
+  const setExecuteCallback = useCallback((callback: (() => void) | null) => {
+    executeCallbackRef.current = callback;
+  }, []);
+
+  const setGenerateCodeCallback = useCallback((callback: (() => string) | null) => {
+    console.log('setGenerateCodeCallback called with:', !!callback);
+    generateCodeCallbackRef.current = callback;
+  }, []);
+
+  const setSaveCallback = useCallback((callback: (() => void) | null) => {
+    saveCallbackRef.current = callback;
+  }, []);
+
+  const setImportWorkflowCallback = useCallback((callback: ((workflowData: any) => void) | null) => {
+    importWorkflowCallbackRef.current = callback;
+  }, []);
 
   const handleConsoleOutput = useCallback((updater: (prev: string[]) => string[]) => {
     setConsoleOutput(updater);
@@ -24,29 +41,33 @@ function App() {
   }, []);
 
   const handleExecute = useCallback(() => {
-    if (executeCallback) {
-      executeCallback();
+    if (executeCallbackRef.current) {
+      executeCallbackRef.current();
     }
-  }, [executeCallback]);
+  }, []);
 
   const handleGenerateCode = useCallback(() => {
-    if (generateCodeCallback) {
-      return generateCodeCallback();
+    console.log('handleGenerateCode called, generateCodeCallback available:', !!generateCodeCallbackRef.current);
+    if (generateCodeCallbackRef.current) {
+      const result = generateCodeCallbackRef.current();
+      console.log('Generated code result:', result);
+      return result;
     }
+    console.error('generateCodeCallback is null or undefined!');
     return '';
-  }, [generateCodeCallback]);
+  }, []);
 
   const handleSave = useCallback(() => {
-    if (saveCallback) {
-      saveCallback();
+    if (saveCallbackRef.current) {
+      saveCallbackRef.current();
     }
-  }, [saveCallback]);
+  }, []);
 
   const handleImportWorkflow = useCallback((workflowData: any) => {
-    if (importWorkflowCallback) {
-      importWorkflowCallback(workflowData);
+    if (importWorkflowCallbackRef.current) {
+      importWorkflowCallbackRef.current(workflowData);
     }
-  }, [importWorkflowCallback]);
+  }, []);
 
   return (
     <div className="app-container">

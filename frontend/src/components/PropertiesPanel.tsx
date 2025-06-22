@@ -190,6 +190,19 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
         return {
           command: { type: 'string', label: 'Command to Execute' }
         };
+      case 'increment':
+        return {
+          variable: { type: 'string', label: 'Variable Name' }
+        };
+      case 'list_create':
+        return {
+          name: { type: 'string', label: 'List Variable Name' },
+          items: { type: 'textarea', label: 'Items (one per line)' }
+        };
+      case 'pycode':
+        return {
+          code: { type: 'textarea', label: 'Python Code' }
+        };
       default:
         return {};
     }

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Console from './Console';
 import LLMQueryPanel from './LLMQueryPanel';
+import HelpModal from './HelpModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ const Layout: React.FC<LayoutProps> = ({
   onConsoleOutput,
   onImportWorkflow
 }) => {
+  const [showHelpModal, setShowHelpModal] = useState(false);
   return (
     <div className="layout">
       {/* Menu Bar */}
@@ -39,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({
             <button className="nav-button">View</button>
             <button className="nav-button">Workflow</button>
             <button className="nav-button">Tools</button>
-            <button className="nav-button">Help</button>
+            <button className="nav-button" onClick={() => setShowHelpModal(true)}>Help</button>
           </nav>
         </div>
         <div className="menu-right">
@@ -105,6 +107,12 @@ const Layout: React.FC<LayoutProps> = ({
         onExecute={onExecute || (() => {})}
         onClear={onClearConsole || (() => {})}
         onGenerateCode={onGenerateCode}
+      />
+
+      {/* Help Modal */}
+      <HelpModal 
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
       />
     </div>
   );
