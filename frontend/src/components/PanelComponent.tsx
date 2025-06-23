@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import type { WorkflowPanel, WorkflowNode, Position } from '../types';
+import type { WorkflowPanel, WorkflowNode, Position, Connection } from '../types';
+import NodeComponent from './NodeComponent';
 
 interface PanelComponentProps {
   panel: WorkflowPanel;
@@ -12,6 +13,12 @@ interface PanelComponentProps {
   onToggleExpanded: (panelId: string) => void;
   onNodeDrag: (nodeId: string, position: Position) => void;
   onNodeReorder: (panelId: string, nodeId: string, newIndex: number) => void;
+  selectedNode: WorkflowNode | null;
+  onNodeSelect: (node: WorkflowNode) => void;
+  onStartConnection: (nodeId: string, outputId: string) => void;
+  onCompleteConnection: (nodeId: string, inputId: string) => void;
+  connecting: { nodeId: string; outputId: string } | null;
+  connections: Connection[];
 }
 
 const PanelComponent: React.FC<PanelComponentProps> = ({
@@ -24,7 +31,13 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
   onNodeDrop,
   onToggleExpanded,
   onNodeDrag,
-  onNodeReorder
+  onNodeReorder,
+  selectedNode,
+  onNodeSelect,
+  onStartConnection,
+  onCompleteConnection,
+  connecting,
+  connections
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -296,6 +309,30 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
                   <div className="node-drag-handle" title="Drag to reorder">
                     ⋮⋮
                   </div>
+                  
+                  {/* Actual node component */}
+                  <NodeComponent
+                    node={{
+                      ...node,
+                      position: { x: 0, y: 0 } // Position relative to panel
+                    }}
+                    selected={selectedNode?.id === node.id}
+                    onSelect={onNodeSelect}
+                    onDrag={onNodeDrag}
+                    onStartConnection={onStartConnection}
+                    onCompleteConnection={onCompleteConnection}
+                    connecting={connecting}
+                    connections={connections}
+                    onReorderNode={(draggedNodeId, targetNodeId, insertBefore) => {
+                      // Handle reordering within panel
+                      const draggedIndex = panelNodes.findIndex(n => n.id === draggedNodeId);
+                      const targetIndex = panelNodes.findIndex(n => n.id === targetNodeId);
+                      if (draggedIndex !== -1 && targetIndex !== -1) {
+                        const newIndex = insertBefore ? targetIndex : targetIndex + 1;
+                        onNodeReorder(panel.id, draggedNodeId, newIndex);
+                      }
+                    }}
+                  />
                 </div>
                 
                 {/* Drop zone at the end */}

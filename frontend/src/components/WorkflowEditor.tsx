@@ -1386,58 +1386,32 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               onToggleExpanded={handleTogglePanelExpanded}
               onNodeDrag={handleNodeDragInPanel}
               onNodeReorder={handleNodeReorder}
+              selectedNode={selectedNode}
+              onNodeSelect={handleNodeSelect}
+              onStartConnection={handleStartConnection}
+              onCompleteConnection={handleCompleteConnection}
+              connecting={connecting}
+              connections={connections}
             />
           ))}
 
-          {/* Nodes - only render nodes that are in expanded panels or not in any panel */}
+          {/* Nodes - only render nodes that are not in any panel */}
           {nodes
-            .filter(node => {
-              if (!node.panelId) return true; // Orphaned nodes
-              const panel = panels.find(p => p.id === node.panelId);
-              return panel?.isExpanded !== false; // Show if panel is expanded or doesn't exist
-            })
-            .map(node => {
-              const panel = panels.find(p => p.id === node.panelId);
-              let nodePosition = node.position;
-              
-              // If node is in a panel, position it relative to the panel
-              if (panel && panel.isExpanded) {
-                // Use the node's actual position.y if it has been set (for custom ordering)
-                // Otherwise calculate based on array index for new nodes
-                const panelNodes = nodes.filter(n => n.panelId === panel.id);
-                const hasCustomPosition = node.position.y !== undefined && node.position.y > 0;
-                
-                if (hasCustomPosition) {
-                  // Use custom position but still apply panel offset and indentation
-                  nodePosition = {
-                    x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
-                    y: node.position.y
-                  };
-                } else {
-                  // Calculate position based on array index for new nodes
-                  const nodeIndex = panelNodes.findIndex(n => n.id === node.id);
-                  nodePosition = {
-                    x: panel.position.x + 16 + ((node.indentLevel || 0) * 24),
-                    y: panel.position.y + 56 + (nodeIndex * 52) // header + padding + node spacing
-                  };
-                }
-              }
-              
-              return (
-                <NodeComponent
-                  key={node.id}
-                  node={{ ...node, position: nodePosition }}
-                  selected={selectedNode?.id === node.id}
-                  onSelect={handleNodeSelect}
-                  onDrag={handleNodeDrag}
-                  onStartConnection={handleStartConnection}
-                  onCompleteConnection={handleCompleteConnection}
-                  connecting={connecting}
-                  connections={connections}
-                  onReorderNode={handleReorderNode}
-                />
-              );
-            })}
+            .filter(node => !node.panelId) // Only orphaned nodes (not in panels)
+            .map(node => (
+              <NodeComponent
+                key={node.id}
+                node={node}
+                selected={selectedNode?.id === node.id}
+                onSelect={handleNodeSelect}
+                onDrag={handleNodeDrag}
+                onStartConnection={handleStartConnection}
+                onCompleteConnection={handleCompleteConnection}
+                connecting={connecting}
+                connections={connections}
+                onReorderNode={handleReorderNode}
+              />
+            ))}
 
           {/* Auto-generated connections between vertically stacked nodes */}
           <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
