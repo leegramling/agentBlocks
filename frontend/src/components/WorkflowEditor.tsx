@@ -13,6 +13,7 @@ interface WorkflowEditorProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
   onExecutionState?: (isExecuting: boolean) => void;
   onNodeCountChange?: (count: number) => void;
+  onNodesChange?: (nodes: WorkflowNode[]) => void;
   onRegisterExecute?: (callback: () => void) => void;
   onRegisterGenerateCode?: (callback: () => string) => void;
   onRegisterSave?: (callback: () => void) => void;
@@ -23,6 +24,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   onConsoleOutput,
   onExecutionState,
   onNodeCountChange,
+  onNodesChange,
   onRegisterExecute,
   onRegisterGenerateCode,
   onRegisterSave,
@@ -100,9 +102,37 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     connectionsRef.current = connections;
   }, [connections]);
 
+  // Notify parent when nodes change
+  useEffect(() => {
+    onNodesChange?.(nodes);
+  }, [nodes, onNodesChange]);
+
   const handleNodeSelect = useCallback((node: WorkflowNode) => {
     setSelectedNode(node);
   }, []);
+
+  const handleRefreshCanvas = useCallback(() => {
+    // Force a re-render of all nodes by updating their keys/positions slightly
+    setNodes(prev => prev.map(node => ({
+      ...node,
+      // Force update by adding a tiny random offset that gets rounded away
+      position: {
+        x: Math.round(node.position.x + (Math.random() - 0.5) * 0.001),
+        y: Math.round(node.position.y + (Math.random() - 0.5) * 0.001)
+      }
+    })));
+    
+    // Also refresh panel positions slightly to force re-render
+    setPanels(prev => prev.map(panel => ({
+      ...panel,
+      position: {
+        x: Math.round(panel.position.x + (Math.random() - 0.5) * 0.001),
+        y: Math.round(panel.position.y + (Math.random() - 0.5) * 0.001)
+      }
+    })));
+    
+    onConsoleOutput?.(prev => [...prev, '🔄 Canvas refreshed - all nodes redrawn']);
+  }, [onConsoleOutput]);
 
   const handleNodeDrag = useCallback((nodeId: string, position: Position) => {
     setNodes(prev => prev.map(node => {
@@ -765,12 +795,19 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const handlePanelDrag = useCallback((panelId: string, newPosition: Position) => {
     const panel = panels.find(p => p.id === panelId);
     if (panel) {
-      const deltaX = newPosition.x - panel.position.x;
-      const deltaY = newPosition.y - panel.position.y;
+      // Snap to grid (20px grid)
+      const gridSize = 20;
+      const snappedPosition = {
+        x: Math.round(newPosition.x / gridSize) * gridSize,
+        y: Math.round(newPosition.y / gridSize) * gridSize
+      };
+      
+      const deltaX = snappedPosition.x - panel.position.x;
+      const deltaY = snappedPosition.y - panel.position.y;
       
       // Move panel
       setPanels(prev => prev.map(p => 
-        p.id === panelId ? { ...p, position: newPosition } : p
+        p.id === panelId ? { ...p, position: snappedPosition } : p
       ));
       
       // Move all nodes in the panel
@@ -1311,6 +1348,13 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         {/* Toolbar */}
         <div className="canvas-toolbar">
           <div className="toolbar-left">
+            <button 
+              className="toolbar-button"
+              onClick={handleRefreshCanvas}
+              title="Refresh Canvas - Redraw all nodes"
+            >
+              🔄 Refresh
+            </button>
             {selectedNode && (
               <>
                 <button 

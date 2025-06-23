@@ -3,16 +3,18 @@ import React, { useState, useRef, useEffect } from 'react';
 interface LLMQueryPanelProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
   onImportWorkflow?: (workflowData: any) => void;
+  nodes?: any[];
+  generatePythonCode?: () => string;
 }
 
-const LLMQueryPanel: React.FC<LLMQueryPanelProps> = ({ onConsoleOutput, onImportWorkflow }) => {
+const LLMQueryPanel: React.FC<LLMQueryPanelProps> = ({ onConsoleOutput, onImportWorkflow, nodes, generatePythonCode }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [lastGeneratedWorkflow, setLastGeneratedWorkflow] = useState<any>(null);
-  const [queryMode, setQueryMode] = useState<'nodes' | 'general'>('nodes');
+  const [queryMode, setQueryMode] = useState<'nodes' | 'general' | 'review'>('nodes');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Check Ollama status on component mount
@@ -49,7 +51,45 @@ const LLMQueryPanel: React.FC<LLMQueryPanelProps> = ({ onConsoleOutput, onImport
 
     try {
       // Create system prompt based on query mode
-      const systemPrompt = queryMode === 'nodes' 
+      const systemPrompt = queryMode === 'review'
+        ? `You are an expert code reviewer analyzing a visual node-based workflow and its generated Python code.
+
+ROLE: Act as a senior software engineer conducting a thorough code review.
+
+REVIEW CRITERIA:
+• Code Quality: Clean, readable, maintainable code
+• Best Practices: PEP 8 compliance, proper naming conventions
+• Performance: Efficient algorithms and data structures
+• Security: Potential vulnerabilities or security issues
+• Error Handling: Proper exception handling and edge cases
+• Logic Flow: Workflow structure and node connections
+• Optimization: Suggestions for improvement
+
+FORMAT YOUR REVIEW AS:
+## Code Review Summary
+- Overall assessment (rating out of 5 stars)
+- Key strengths
+- Major concerns
+
+## Detailed Analysis
+### Code Quality
+[Your analysis]
+
+### Best Practices
+[Your analysis]
+
+### Performance & Efficiency
+[Your analysis]
+
+### Security Considerations
+[Your analysis]
+
+### Recommended Improvements
+1. [Specific suggestion with line/node references]
+2. [Specific suggestion with line/node references]
+
+Be constructive, specific, and provide actionable feedback. Reference specific nodes or code sections when possible.`
+        : queryMode === 'nodes' 
         ? `You are a visual programming assistant for AgentBlocks, a node-based workflow editor.
 
 WORKFLOW JSON FORMAT: For workflow creation requests, output pure JSON with these exact keys:
@@ -127,7 +167,31 @@ For non-workflow questions, provide helpful programming guidance.`
 
 Keep responses practical and coding-focused. Provide code examples when helpful.`;
 
-      const fullPrompt = `${systemPrompt}\n\nUser: ${query}`;
+      let fullPrompt = `${systemPrompt}\n\nUser: ${query}`;
+      
+      // For code review mode, include the workflow data and generated Python code
+      if (queryMode === 'review' && nodes && generatePythonCode) {
+        const pythonCode = generatePythonCode();
+        const workflowData = {
+          nodes: nodes.map(node => ({
+            id: node.id,
+            type: node.type,
+            properties: node.properties,
+            panelId: node.panelId
+          })),
+          nodeCount: nodes.length
+        };
+        
+        fullPrompt += `\n\n## WORKFLOW DATA (JSON):
+\`\`\`json
+${JSON.stringify(workflowData, null, 2)}
+\`\`\`
+
+## GENERATED PYTHON CODE:
+\`\`\`python
+${pythonCode}
+\`\`\``;
+      }
 
       const response = await fetch('http://localhost:11434/api/generate', {
         method: 'POST',
@@ -219,6 +283,14 @@ Keep responses practical and coding-focused. Provide code examples when helpful.
         "Create a workflow that loops through files and transforms text",
         "Make a workflow with list comprehension and data processing"
       ]
+    : queryMode === 'review'
+    ? [
+        "Review this workflow for code quality and best practices",
+        "Analyze the generated Python code for performance improvements",
+        "Check this workflow for potential security vulnerabilities",
+        "Evaluate the error handling and edge cases in this code",
+        "Suggest optimizations for this node-based workflow"
+      ]
     : [
         "How do I optimize Python code for better performance?",
         "What's the difference between lists and tuples in Python?",
@@ -245,6 +317,14 @@ Keep responses practical and coding-focused. Provide code examples when helpful.
               onClick={() => setQueryMode('general')}
             >
               💡 Code Help
+            </button>
+            <button 
+              className={`mode-toggle-button ${queryMode === 'review' ? 'active' : ''}`}
+              onClick={() => setQueryMode('review')}
+              disabled={!nodes || nodes.length === 0}
+              title={!nodes || nodes.length === 0 ? 'Add nodes to your workflow to enable code review' : 'Review your workflow and generated code'}
+            >
+              🔍 Review
             </button>
           </div>
           <div className={`ollama-status ${ollamaStatus}`}>

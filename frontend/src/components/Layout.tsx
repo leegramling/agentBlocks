@@ -8,6 +8,7 @@ interface LayoutProps {
   consoleOutput?: string[];
   isExecuting?: boolean;
   nodeCount?: number;
+  nodes?: any[];
   onExecute?: () => void;
   onClearConsole?: () => void;
   onGenerateCode?: () => string;
@@ -21,6 +22,7 @@ const Layout: React.FC<LayoutProps> = ({
   consoleOutput = [], 
   isExecuting = false, 
   nodeCount = 0,
+  nodes,
   onExecute, 
   onClearConsole,
   onGenerateCode,
@@ -98,6 +100,8 @@ const Layout: React.FC<LayoutProps> = ({
       <LLMQueryPanel 
         onConsoleOutput={onConsoleOutput} 
         onImportWorkflow={onImportWorkflow}
+        nodes={nodes}
+        generatePythonCode={onGenerateCode}
       />
 
       {/* Console Panel */}

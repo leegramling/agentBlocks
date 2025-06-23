@@ -44,6 +44,7 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [selectedNodeIndex, setSelectedNodeIndex] = useState<number>(-1);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Calculate panel nodes and their bounds
@@ -136,6 +137,50 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
       };
     }
   }, [isDragging, isResizing, dragOffset]);
+
+  // Keyboard navigation for nodes within panel
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!panel.isExpanded || panelNodes.length === 0) return;
+    
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const sortedNodes = panelNodes.sort((a, b) => (a.position.y || 0) - (b.position.y || 0));
+      let newIndex = selectedNodeIndex;
+      
+      if (e.key === 'ArrowUp') {
+        newIndex = selectedNodeIndex <= 0 ? sortedNodes.length - 1 : selectedNodeIndex - 1;
+      } else if (e.key === 'ArrowDown') {
+        newIndex = selectedNodeIndex >= sortedNodes.length - 1 ? 0 : selectedNodeIndex + 1;
+      }
+      
+      setSelectedNodeIndex(newIndex);
+      
+      // Select the node in the parent component
+      if (sortedNodes[newIndex]) {
+        onNodeSelect(sortedNodes[newIndex]);
+      }
+    }
+  };
+
+  // Focus management for keyboard navigation
+  React.useEffect(() => {
+    if (selected && panelRef.current) {
+      panelRef.current.focus();
+    }
+  }, [selected]);
+
+  // Update selectedNodeIndex when selectedNode changes
+  React.useEffect(() => {
+    if (selectedNode && selectedNode.panelId === panel.id) {
+      const sortedNodes = panelNodes.sort((a, b) => (a.position.y || 0) - (b.position.y || 0));
+      const index = sortedNodes.findIndex(node => node.id === selectedNode.id);
+      setSelectedNodeIndex(index);
+    } else if (selectedNode?.panelId !== panel.id) {
+      setSelectedNodeIndex(-1);
+    }
+  }, [selectedNode, panelNodes, panel.id]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -231,16 +276,21 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
   return (
     <div
       ref={panelRef}
-      className={`workflow-panel ${panel.type} ${selected ? 'selected' : ''}`}
+      className={`workflow-panel ${panel.type} ${selected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
       style={{
         position: 'absolute',
         left: panel.position.x,
         top: panel.position.y,
         width: actualSize.width,
         height: actualSize.height,
-        borderColor: panel.color || (panel.type === 'main' ? '#3b82f6' : '#8b5cf6')
+        borderColor: panel.color || (panel.type === 'main' ? '#3b82f6' : '#8b5cf6'),
+        cursor: isDragging ? 'grabbing' : 'grab',
+        opacity: isDragging ? 0.8 : 1,
+        zIndex: isDragging ? 1000 : 'auto'
       }}
+      tabIndex={0}
       onMouseDown={handleMouseDown}
+      onKeyDown={handleKeyDown}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -261,6 +311,11 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
           </span>
           <span className="panel-name">{panel.name}</span>
           <span className="panel-node-count">({panelNodes.length})</span>
+          {selected && panelNodes.length > 0 && (
+            <span className="panel-hint" style={{ fontSize: '11px', opacity: 0.7, marginLeft: '8px' }}>
+              ↑↓ Navigate
+            </span>
+          )}
         </div>
         
         {panel.type === 'module' && (
@@ -294,12 +349,14 @@ const PanelComponent: React.FC<PanelComponentProps> = ({
                 
                 {/* Node container */}
                 <div
-                  className={`panel-node ${draggedNodeId === node.id ? 'dragging' : ''}`}
+                  className={`panel-node ${draggedNodeId === node.id ? 'dragging' : ''} ${index === selectedNodeIndex ? 'keyboard-focused' : ''}`}
                   style={{
                     position: 'relative',
                     marginBottom: index < panelNodes.length - 1 ? '8px' : '0',
                     paddingLeft: (node.indentLevel || 0) * 24,
-                    opacity: draggedNodeId === node.id ? 0.5 : 1
+                    opacity: draggedNodeId === node.id ? 0.5 : 1,
+                    outline: index === selectedNodeIndex && selected ? '2px solid #3b82f6' : 'none',
+                    borderRadius: index === selectedNodeIndex && selected ? '4px' : '0'
                   }}
                   draggable
                   onDragStart={(e) => handleNodeDragStart(e, node.id)}

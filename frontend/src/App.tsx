@@ -8,6 +8,7 @@ function App() {
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [nodeCount, setNodeCount] = useState(0);
+  const [nodes, setNodes] = useState<any[]>([]);
   
   // These will be passed to and managed by WorkflowEditor - using refs for stable function references
   const executeCallbackRef = useRef<(() => void) | null>(null);
@@ -69,6 +70,10 @@ function App() {
     }
   }, []);
 
+  const handleNodesChange = useCallback((newNodes: any[]) => {
+    setNodes(newNodes);
+  }, []);
+
   return (
     <div className="app-container">
       <Router>
@@ -76,6 +81,7 @@ function App() {
           consoleOutput={consoleOutput}
           isExecuting={isExecuting}
           nodeCount={nodeCount}
+          nodes={nodes}
           onExecute={handleExecute}
           onClearConsole={handleClearConsole}
           onGenerateCode={handleGenerateCode}
@@ -91,6 +97,7 @@ function App() {
                   onConsoleOutput={handleConsoleOutput}
                   onExecutionState={setIsExecuting}
                   onNodeCountChange={setNodeCount}
+                  onNodesChange={handleNodesChange}
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
                   onRegisterSave={setSaveCallback}
@@ -105,6 +112,7 @@ function App() {
                   onConsoleOutput={handleConsoleOutput}
                   onExecutionState={setIsExecuting}
                   onNodeCountChange={setNodeCount}
+                  onNodesChange={handleNodesChange}
                   onRegisterExecute={setExecuteCallback}
                   onRegisterGenerateCode={setGenerateCodeCallback}
                   onRegisterSave={setSaveCallback}

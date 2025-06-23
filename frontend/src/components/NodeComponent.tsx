@@ -95,17 +95,22 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       return;
     }
 
-    setIsDragging(true);
-    onSelect(node);
-    
-    // Calculate drag offset relative to where the mouse clicked within the node
-    const rect = nodeRef.current?.getBoundingClientRect();
-    if (rect) {
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
+    // Only allow dragging for nodes that are not in panels
+    if (!node.panelId) {
+      setIsDragging(true);
+      
+      // Calculate drag offset relative to where the mouse clicked within the node
+      const rect = nodeRef.current?.getBoundingClientRect();
+      if (rect) {
+        setDragOffset({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        });
+      }
     }
+    
+    // Always select the node on click
+    onSelect(node);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -403,12 +408,13 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       ref={nodeRef}
       data-node-id={node.id}
       style={{
-        position: 'absolute',
-        left: node.position.x,
-        top: node.position.y,
+        position: node.panelId ? 'relative' : 'absolute',
+        left: node.panelId ? 'auto' : node.position.x,
+        top: node.panelId ? 'auto' : node.position.y,
         userSelect: 'none',
-        cursor: 'move',
-        outline: selected ? '2px solid #60a5fa' : 'none'
+        cursor: node.panelId ? 'pointer' : 'move',
+        outline: selected ? '2px solid #60a5fa' : 'none',
+        width: node.panelId ? '100%' : 'auto'
       }}
       onMouseDown={handleMouseDown}
     >
