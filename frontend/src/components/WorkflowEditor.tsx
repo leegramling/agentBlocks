@@ -199,37 +199,60 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         return; // Panel's drop handler will take care of this
       }
       
-      // Create a new module for canvas drops
-      const moduleCount = panels.filter(p => p.type === 'module').length;
-      const moduleName = `Module${String(moduleCount + 1).padStart(2, '0')}`;
+      // First, create the node on the canvas using the normal flow
+      handleAddNode(blockType, canvasDropPosition);
       
-      const newPanel: WorkflowPanel = {
-        id: `module_${Date.now()}`,
-        name: moduleName,
-        type: 'module',
-        position: { 
-          x: canvasDropPosition.x - 140, // Center panel on drop position
-          y: canvasDropPosition.y - 30
-        },
-        size: { width: 280, height: 120 },
-        color: '#8b5cf6',
-        isExpanded: true
-      };
-      
-      // Add the new panel first
-      setPanels(prev => [...prev, newPanel]);
-      setSelectedPanel(newPanel);
-      
-      // Add the node to the new panel with a slight delay to ensure panel is created
+      // Then, immediately create a module around it and move the node into the module
       setTimeout(() => {
-        const nodePosition = {
-          x: 16, // Left padding within panel
-          y: 16  // Top padding within panel
+        const moduleCount = panels.filter(p => p.type === 'module').length;
+        const moduleName = `Module${String(moduleCount + 1).padStart(2, '0')}`;
+        
+        const newPanel: WorkflowPanel = {
+          id: `module_${Date.now()}`,
+          name: moduleName,
+          type: 'module',
+          position: { 
+            x: canvasDropPosition.x - 140, // Center panel on drop position
+            y: canvasDropPosition.y - 40
+          },
+          size: { width: 280, height: 120 },
+          color: '#8b5cf6',
+          isExpanded: true
         };
         
-        handleAddNode(blockType, nodePosition, newPanel.id);
+        // Add the new panel
+        setPanels(prev => [...prev, newPanel]);
+        setSelectedPanel(newPanel);
+        
+        // Find the node we just created (it should be the most recent one at this position)
+        setNodes(prevNodes => {
+          const recentNode = prevNodes
+            .filter(node => !node.panelId && 
+                           Math.abs(node.position.x - canvasDropPosition.x) < 10 &&
+                           Math.abs(node.position.y - canvasDropPosition.y) < 10)
+            .sort((a, b) => parseInt(b.id.split('_')[1]) - parseInt(a.id.split('_')[1]))[0];
+          
+          if (recentNode) {
+            // Move the node into the panel
+            return prevNodes.map(node => {
+              if (node.id === recentNode.id) {
+                return {
+                  ...node,
+                  panelId: newPanel.id,
+                  position: {
+                    x: newPanel.position.x + 16, // Panel position + padding
+                    y: newPanel.position.y + 56  // Panel position + header + padding
+                  }
+                };
+              }
+              return node;
+            });
+          }
+          return prevNodes;
+        });
+        
         onConsoleOutput?.(prev => [...prev, `📦 Created ${moduleName} with ${blockType} node`]);
-      }, 10);
+      }, 50); // Slightly longer delay to ensure node creation completes
     }
   }, [handleAddNode, panels, onConsoleOutput, canvasPan, canvasZoom]);
 
