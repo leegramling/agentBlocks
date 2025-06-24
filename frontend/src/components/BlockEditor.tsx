@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import type { Block, Position } from '../types';
 import BlockComponent from './BlockComponent';
-import BlockPalette from './BlockPalette';
 import { ArrowLeft, Play, Save, Code, Settings, Globe, Terminal, FileText, Search } from 'lucide-react';
 
 const BlockEditor: React.FC = () => {
@@ -51,7 +50,7 @@ const BlockEditor: React.FC = () => {
     return categories[type] || 'General';
   };
 
-  const getDefaultProperties = (type: string): Record<string, any> => {
+  const getDefaultProperties = (type: string): Record<string, unknown> => {
     switch (type) {
       case 'variable_set':
         return { variableName: 'myVar', value: '' };
@@ -162,13 +161,14 @@ const BlockEditor: React.FC = () => {
       case 'text_split':
         return `# Split text\n${blockVar}_result = (${props.text || '""'}).split("${props.separator || ' '}")\n`;
         
-      case 'regex_match':
+      case 'regex_match': {
         imports.add('import re');
         const flags = [];
         if (props.ignoreCase) flags.push('re.IGNORECASE');
         if (props.multiline) flags.push('re.MULTILINE');
         const flagsStr = flags.length > 0 ? ` | ${flags.join(' | ')}` : '';
         return `# Regex match\n${blockVar}_pattern = re.compile(r"${props.pattern || ''}"${flagsStr})\n${blockVar}_result = ${blockVar}_pattern.findall(${props.text || '""'})\n`;
+      }
         
       case 'regex_replace':
         imports.add('import re');
@@ -209,7 +209,7 @@ const BlockEditor: React.FC = () => {
         return `# Math subtraction\n${blockVar}_result = (${props.a || 0}) - (${props.b || 0})\n`;
         
       case 'array_create':
-        return `# Create array\n${blockVar}_result = [${props.items?.map((item: any) => JSON.stringify(item)).join(', ') || ''}]\n`;
+        return `# Create array\n${blockVar}_result = [${props.items?.map((item: unknown) => JSON.stringify(item)).join(', ') || ''}]\n`;
         
       case 'array_get':
         return `# Get array item\ntry:\n    ${blockVar}_result = (${props.array || '[]'})[${props.index || 0}]\nexcept (IndexError, TypeError) as e:\n    ${blockVar}_result = f"Error accessing array: {str(e)}"\n`;
@@ -511,6 +511,54 @@ const BlockEditor: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Code Preview Modal */}
+      {showCodePreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg w-4/5 h-4/5 flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-lg font-semibold text-white">Generated Python Code</h3>
+              <button 
+                onClick={() => setShowCodePreview(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            
+            {/* Code Content */}
+            <div className="flex-1 p-4">
+              <pre className="bg-gray-900 text-green-400 p-4 rounded h-full overflow-auto font-mono text-sm">
+                {generateCode()}
+              </pre>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-4 border-t border-gray-700">
+              <div className="text-gray-400 text-sm">
+                {blocks.length} block{blocks.length !== 1 ? 's' : ''} • Python 3.x
+              </div>
+              <div className="flex space-x-2">
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(generateCode());
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Copy Code
+                </button>
+                <button 
+                  onClick={() => setShowCodePreview(false)}
+                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -64,7 +64,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(true);
-  const [showKeyMappings, setKeyMappings] = useState(true);
+  const [showKeyMappings, setShowKeyMappings] = useState(false);
   const [showCanvasPropertyPanel, setShowCanvasPropertyPanel] = useState(false);
   const [showNodePalette, setShowNodePalette] = useState(false);
   const [showInsertPopup, setShowInsertPopup] = useState(false);
@@ -719,10 +719,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       // Handle global keyboard shortcuts
       if (e.key === 'F1') {
         e.preventDefault();
-        setKeyMappings(true);
-        if (toggleHelpModalCallback?.current) {
-          toggleHelpModalCallback.current();
-        }
+        setShowKeyMappings(prev => !prev);
       } else if (e.key === 'F2') {
         e.preventDefault();
         setShowNodePalette(prev => !prev);
