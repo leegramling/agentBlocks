@@ -1,0 +1,75 @@
+{
+  "type": "pycode",
+  "name": "Python Code",
+  "category": "logic",
+  "version": "1.0",
+  "description": "Execute custom Python code with input/output handling",
+  "icon": "📝",
+  "color": "#3b82f6",
+  "properties": {
+    "code": {
+      "type": "textarea",
+      "label": "Python Code",
+      "description": "Custom Python code to execute",
+      "default": "# Write your Python code here\nresult = 'Hello from Python!'",
+      "required": true,
+      "placeholder": "Enter Python code..."
+    },
+    "imports": {
+      "type": "textarea",
+      "label": "Import Statements",
+      "description": "Additional import statements needed",
+      "default": "",
+      "placeholder": "import os\nimport json\nfrom datetime import datetime"
+    },
+    "timeout": {
+      "type": "number",
+      "label": "Timeout (seconds)",
+      "description": "Maximum execution time in seconds",
+      "default": 30,
+      "min": 1,
+      "max": 300
+    },
+    "capture_output": {
+      "type": "boolean",
+      "label": "Capture Output",
+      "description": "Capture print statements and return as output",
+      "default": true
+    }
+  },
+  "inputs": [
+    {
+      "name": "input_data",
+      "type": "any",
+      "label": "Input Data",
+      "description": "Data available as 'input_data' variable in code",
+      "optional": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "any",
+      "label": "Result",
+      "description": "Value of 'result' variable after execution"
+    },
+    {
+      "name": "output",
+      "type": "string",
+      "label": "Console Output",
+      "description": "Captured print statements and console output"
+    },
+    {
+      "name": "success",
+      "type": "boolean",
+      "label": "Success",
+      "description": "Whether the code executed without errors"
+    },
+    {
+      "name": "error",
+      "type": "string",
+      "label": "Error Message",
+      "description": "Error message if execution failed"
+    }
+  ]
+}

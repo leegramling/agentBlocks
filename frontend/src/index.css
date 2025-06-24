@@ -2047,6 +2047,36 @@ body {
   color: #9ca3af;
 }
 
+/* Language Selector */
+.language-selector {
+  display: flex;
+  gap: 4px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #4b5563;
+}
+
+.lang-button {
+  background: #374151;
+  border: none;
+  color: #d1d5db;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.lang-button:hover {
+  background: #4b5563;
+  color: #ffffff;
+}
+
+.lang-button.active {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
 .code-modal-actions {
   display: flex;
   gap: 8px;

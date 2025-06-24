@@ -1,0 +1,143 @@
+{
+  "type": "grep",
+  "name": "Grep Search",
+  "category": "text",
+  "version": "1.0",
+  "description": "Search for patterns in text or files using regex with Linux grep-like options",
+  "icon": "🔍",
+  "color": "#10b981",
+  "properties": {
+    "pattern": {
+      "type": "string",
+      "label": "Search Pattern",
+      "description": "Regular expression or text pattern to search for",
+      "default": "",
+      "required": true,
+      "placeholder": "error|warning"
+    },
+    "input_source": {
+      "type": "select",
+      "label": "Input Source",
+      "description": "Where to search for the pattern",
+      "default": "input",
+      "options": [
+        { "value": "input", "label": "Text from previous node" },
+        { "value": "file", "label": "File on disk" }
+      ]
+    },
+    "file_path": {
+      "type": "string",
+      "label": "File Path",
+      "description": "Path to file to search (when using file input)",
+      "default": "",
+      "placeholder": "/var/log/app.log",
+      "conditional": {
+        "field": "input_source",
+        "value": "file"
+      }
+    },
+    "case_insensitive": {
+      "type": "boolean",
+      "label": "Case Insensitive (-i)",
+      "description": "Ignore case when matching patterns",
+      "default": false
+    },
+    "whole_words": {
+      "type": "boolean", 
+      "label": "Whole Words (-w)",
+      "description": "Match only whole words",
+      "default": false
+    },
+    "invert_match": {
+      "type": "boolean",
+      "label": "Invert Match (-v)",
+      "description": "Select non-matching lines",
+      "default": false
+    },
+    "line_numbers": {
+      "type": "boolean",
+      "label": "Line Numbers (-n)",
+      "description": "Include line numbers in output",
+      "default": true
+    },
+    "count_only": {
+      "type": "boolean",
+      "label": "Count Only (-c)",
+      "description": "Return only the count of matching lines",
+      "default": false
+    },
+    "max_count": {
+      "type": "number",
+      "label": "Max Count (-m)",
+      "description": "Maximum number of matches to return (0 = unlimited)",
+      "default": 0,
+      "min": 0
+    },
+    "context_before": {
+      "type": "number",
+      "label": "Context Before (-B)",
+      "description": "Number of lines to show before each match",
+      "default": 0,
+      "min": 0,
+      "max": 10
+    },
+    "context_after": {
+      "type": "number",
+      "label": "Context After (-A)",
+      "description": "Number of lines to show after each match", 
+      "default": 0,
+      "min": 0,
+      "max": 10
+    },
+    "recursive": {
+      "type": "boolean",
+      "label": "Recursive (-r)",
+      "description": "Search directories recursively",
+      "default": false,
+      "conditional": {
+        "field": "input_source",
+        "value": "file"
+      }
+    },
+    "file_pattern": {
+      "type": "string",
+      "label": "File Pattern",
+      "description": "Glob pattern for files to search (when recursive)",
+      "default": "*",
+      "placeholder": "*.log",
+      "conditional": {
+        "field": "recursive",
+        "value": true
+      }
+    }
+  },
+  "inputs": [
+    {
+      "name": "text_input",
+      "type": "string",
+      "label": "Text Input",
+      "description": "Text to search through",
+      "optional": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "matches",
+      "type": "array",
+      "label": "Matches",
+      "description": "Array of matching lines with metadata"
+    },
+    {
+      "name": "match_count",
+      "type": "number", 
+      "label": "Match Count",
+      "description": "Total number of matches found"
+    },
+    {
+      "name": "success",
+      "type": "boolean",
+      "label": "Success",
+      "description": "Whether the grep operation completed successfully"
+    }
+  ]
+}

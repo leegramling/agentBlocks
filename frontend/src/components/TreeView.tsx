@@ -1,20 +1,18 @@
 import React from 'react';
-import type { WorkflowNode, WorkflowPanel } from '../types';
+import type { WorkflowNode } from '../types';
 
 interface TreeViewProps {
   nodes: WorkflowNode[];
-  panels: WorkflowPanel[];
+  activeFunctionId: string;
   selectedNodeId?: string;
   onNodeSelect: (node: WorkflowNode) => void;
-  onPanelSelect: (panel: WorkflowPanel) => void;
 }
 
 const TreeView: React.FC<TreeViewProps> = ({ 
   nodes, 
-  panels, 
+  activeFunctionId,
   selectedNodeId, 
-  onNodeSelect,
-  onPanelSelect 
+  onNodeSelect
 }) => {
   const getNodeIcon = (type: string) => {
     const icons: Record<string, string> = {
@@ -44,18 +42,12 @@ const TreeView: React.FC<TreeViewProps> = ({
     return icons[type] || '📦';
   };
 
-  const getNodesByPanel = (panelId: string) => {
+  const getFunctionNodes = () => {
+    return nodes.filter(node => node.type === 'function');
+  };
+
+  const getChildNodes = (parentId: string) => {
     return nodes
-      .filter(node => node.panelId === panelId)
-      .sort((a, b) => a.position.y - b.position.y);
-  };
-
-  const getParentNodes = (panelNodes: WorkflowNode[]) => {
-    return panelNodes.filter(node => !node.parentId);
-  };
-
-  const getChildNodes = (parentId: string, panelNodes: WorkflowNode[]) => {
-    return panelNodes
       .filter(node => node.parentId === parentId)
       .sort((a, b) => a.position.y - b.position.y);
   };
@@ -66,13 +58,14 @@ const TreeView: React.FC<TreeViewProps> = ({
 
   const renderNode = (node: WorkflowNode, depth: number = 0) => {
     const isSelected = selectedNodeId === node.id;
+    const isActiveFunction = node.type === 'function' && node.id === activeFunctionId;
     const isParent = isParentType(node.type);
-    const childNodes = getChildNodes(node.id, nodes.filter(n => n.panelId === node.panelId));
+    const childNodes = getChildNodes(node.id);
     
     return (
       <div key={node.id} className="tree-node-container">
         <div 
-          className={`tree-node ${isSelected ? 'selected' : ''}`}
+          className={`tree-node ${isSelected ? 'selected' : ''} ${isActiveFunction ? 'active-function' : ''}`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           onClick={() => onNodeSelect(node)}
         >
@@ -91,49 +84,24 @@ const TreeView: React.FC<TreeViewProps> = ({
     );
   };
 
-  const renderPanel = (panel: WorkflowPanel) => {
-    const panelNodes = getNodesByPanel(panel.id);
-    const rootNodes = getParentNodes(panelNodes);
-    
-    return (
-      <div key={panel.id} className="tree-panel">
-        <div 
-          className="tree-panel-header"
-          onClick={() => onPanelSelect(panel)}
-        >
-          <span className="tree-panel-icon">
-            {panel.type === 'main' ? '🏠' : '📦'}
-          </span>
-          <span className="tree-panel-name">{panel.name}</span>
-          <span className="tree-panel-count">({panelNodes.length})</span>
-        </div>
-        
-        <div className="tree-panel-nodes">
-          {rootNodes.map(node => renderNode(node, 0))}
-        </div>
-      </div>
-    );
-  };
-
-  // Ensure main panel is first
-  const sortedPanels = [...panels].sort((a, b) => {
-    if (a.type === 'main') return -1;
-    if (b.type === 'main') return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const functionNodes = getFunctionNodes();
 
   return (
     <div className="tree-view">
       <div className="tree-view-header">
-        <h3>Workflow Structure</h3>
+        <h3>Function Structure</h3>
       </div>
       
       <div className="tree-view-content">
-        {sortedPanels.map(panel => renderPanel(panel))}
+        {functionNodes.map(functionNode => (
+          <div key={functionNode.id} className="tree-function">
+            {renderNode(functionNode, 0)}
+          </div>
+        ))}
         
-        {panels.length === 0 && (
+        {functionNodes.length === 0 && (
           <div className="tree-view-empty">
-            <p>No panels created yet</p>
+            <p>No functions created yet</p>
           </div>
         )}
       </div>

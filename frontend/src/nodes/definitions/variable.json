@@ -1,0 +1,49 @@
+{
+  "type": "variable",
+  "name": "Variable",
+  "category": "data",
+  "version": "1.0",
+  "description": "Store and manage data values",
+  "icon": "📦",
+  "color": "#8b5cf6",
+  "properties": {
+    "name": {
+      "type": "string",
+      "label": "Variable Name",
+      "description": "Name of the variable to create",
+      "default": "myVariable",
+      "required": true,
+      "placeholder": "variableName"
+    },
+    "value": {
+      "type": "textarea",
+      "label": "Value",
+      "description": "Value to store in the variable",
+      "default": "hello world",
+      "required": true,
+      "placeholder": "Enter value..."
+    },
+    "type": {
+      "type": "select",
+      "label": "Data Type",
+      "description": "Type of data being stored",
+      "default": "string",
+      "options": [
+        { "value": "string", "label": "String" },
+        { "value": "number", "label": "Number" },
+        { "value": "boolean", "label": "Boolean" },
+        { "value": "array", "label": "Array" },
+        { "value": "object", "label": "Object" }
+      ]
+    }
+  },
+  "inputs": [],
+  "outputs": [
+    {
+      "name": "value",
+      "type": "any",
+      "label": "Value",
+      "description": "The stored variable value"
+    }
+  ]
+}

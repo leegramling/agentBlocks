@@ -7,7 +7,8 @@ interface ConsoleProps {
   isExecuting: boolean;
   onExecute: () => void;
   onClear: () => void;
-  onGenerateCode?: () => string;
+  onGeneratePythonCode?: () => string;
+  onGenerateRustCode?: () => string;
 }
 
 const Console: React.FC<ConsoleProps> = ({ 
@@ -15,10 +16,12 @@ const Console: React.FC<ConsoleProps> = ({
   isExecuting, 
   onExecute, 
   onClear,
-  onGenerateCode 
+  onGeneratePythonCode,
+  onGenerateRustCode 
 }) => {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState('');
+  const [generatedPythonCode, setGeneratedPythonCode] = useState('');
+  const [generatedRustCode, setGeneratedRustCode] = useState('');
   const consoleOutputRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when output changes
@@ -29,16 +32,32 @@ const Console: React.FC<ConsoleProps> = ({
   }, [output]);
 
   const handleShowCode = () => {
-    console.log('handleShowCode called, onGenerateCode available:', !!onGenerateCode);
-    if (onGenerateCode) {
-      const code = onGenerateCode();
-      console.log('Generated code length:', code?.length || 0);
-      console.log('Generated code:', code);
-      setGeneratedCode(code);
-      setIsCodeModalOpen(true);
+    console.log('handleShowCode called, generators available:', !!onGeneratePythonCode, !!onGenerateRustCode);
+    
+    let pythonCode = '';
+    let rustCode = '';
+    
+    if (onGeneratePythonCode) {
+      pythonCode = onGeneratePythonCode();
+      console.log('Generated Python code length:', pythonCode?.length || 0);
+      console.log('Python code preview:', pythonCode?.substring(0, 200));
+      console.log('Full Python code:', pythonCode);
     } else {
-      console.error('onGenerateCode callback not available!');
+      console.log('No Python code generator available');
     }
+    
+    if (onGenerateRustCode) {
+      rustCode = onGenerateRustCode();
+      console.log('Generated Rust code length:', rustCode?.length || 0);
+      console.log('Rust code preview:', rustCode?.substring(0, 200));
+      console.log('Full Rust code:', rustCode);
+    } else {
+      console.log('No Rust code generator available');
+    }
+    
+    setGeneratedPythonCode(pythonCode);
+    setGeneratedRustCode(rustCode);
+    setIsCodeModalOpen(true);
   };
 
   return (
@@ -102,8 +121,9 @@ const Console: React.FC<ConsoleProps> = ({
       <CodeModal
         isOpen={isCodeModalOpen}
         onClose={() => setIsCodeModalOpen(false)}
-        code={generatedCode}
-        title="Generated Python Code"
+        pythonCode={generatedPythonCode}
+        rustCode={generatedRustCode}
+        title="Generated Code"
       />
     </div>
   );

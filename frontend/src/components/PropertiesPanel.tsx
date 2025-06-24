@@ -1,16 +1,13 @@
 import React, { useRef, useImperativeHandle, forwardRef } from 'react';
-import type { WorkflowNode, WorkflowPanel } from '../types';
-import TreeView from './TreeView';
+import type { WorkflowNode } from '../types';
 import VariablePicker from './VariablePicker';
 
 interface PropertiesPanelProps {
   selectedNode: WorkflowNode | null;
-  selectedPanel?: WorkflowPanel | null;
   nodes: WorkflowNode[];
-  panels: WorkflowPanel[];
+  activeFunctionId?: string;
   onUpdateNode: (node: WorkflowNode) => void;
   onNodeSelect: (node: WorkflowNode) => void;
-  onPanelSelect: (panel: WorkflowPanel) => void;
 }
 
 export interface PropertiesPanelRef {
@@ -19,12 +16,10 @@ export interface PropertiesPanelRef {
 
 const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({ 
   selectedNode, 
-  selectedPanel,
   nodes,
-  panels,
+  activeFunctionId,
   onUpdateNode,
-  onNodeSelect,
-  onPanelSelect 
+  onNodeSelect
 }, ref) => {
   const propertyInputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
 
@@ -339,14 +334,6 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
 
         </div>
 
-        {/* Tree View */}
-        <TreeView
-          nodes={nodes}
-          panels={panels}
-          selectedNodeId={selectedNode?.id}
-          onNodeSelect={onNodeSelect}
-          onPanelSelect={onPanelSelect}
-        />
       </div>
     </div>
   );

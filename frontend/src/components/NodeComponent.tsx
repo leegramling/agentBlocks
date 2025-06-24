@@ -12,6 +12,7 @@ interface NodeComponentProps {
   connecting: { nodeId: string; outputId: string } | null;
   connections: Connection[];
   onReorderNode?: (draggedNodeId: string, targetNodeId: string, insertBefore: boolean) => void;
+  allNodes?: WorkflowNode[];
 }
 
 const NodeComponent: React.FC<NodeComponentProps> = ({
@@ -23,7 +24,8 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
   onCompleteConnection,
   connecting,
   connections,
-  onReorderNode
+  onReorderNode,
+  allNodes
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
@@ -35,6 +37,7 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       // Original node types
       bash: '💻',
       regex: '🔍',
+      grep: '🔍',
       curl: '🌐',
       scp: '📁',
       input: '⬇️',
@@ -64,6 +67,7 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
       // Original node types
       bash: '#3b82f6',
       regex: '#8b5cf6',
+      grep: '#10b981',
       curl: '#10b981',
       scp: '#f97316',
       input: '#6b7280',
@@ -403,6 +407,45 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
     return connections.some(conn => conn.source_node === node.id);
   };
 
+  const getFunctionColor = () => {
+    if (!allNodes) return '#6b7280'; // Default gray
+    
+    // If this is a function node, find its color based on its own ID
+    if (node.type === 'function') {
+      const functionId = node.id;
+      return getFunctionColorById(functionId);
+    }
+    
+    // If this is a regular node, find its parent function and use that color
+    const parentFunctionId = node.parentId;
+    if (parentFunctionId) {
+      return getFunctionColorById(parentFunctionId);
+    }
+    
+    return '#6b7280'; // Default gray if no function
+  };
+
+  const getFunctionColorById = (functionId: string) => {
+    // Generate consistent colors for different functions
+    const colors = [
+      '#3b82f6', // Blue (main)
+      '#10b981', // Green 
+      '#f59e0b', // Amber
+      '#ef4444', // Red
+      '#8b5cf6', // Violet
+      '#ec4899', // Pink
+      '#06b6d4', // Cyan
+      '#84cc16', // Lime
+    ];
+    
+    // Use a simple hash of the function ID to pick a color consistently
+    let hash = 0;
+    for (let i = 0; i < functionId.length; i++) {
+      hash = ((hash << 5) - hash + functionId.charCodeAt(i)) & 0xffffffff;
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
   return (
     <div
       ref={nodeRef}
@@ -413,7 +456,11 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
         top: node.panelId ? 'auto' : node.position.y,
         userSelect: 'none',
         cursor: node.panelId ? 'pointer' : 'move',
-        outline: selected ? '2px solid #60a5fa' : 'none',
+        outline: selected 
+          ? '2px solid #60a5fa' 
+          : node.data?.isActiveFunction 
+            ? '3px solid #fbbf24' 
+            : 'none',
         width: node.panelId ? '100%' : 'auto'
       }}
       onMouseDown={handleMouseDown}
@@ -422,6 +469,21 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
         className={`workflow-node ${selected ? 'selected' : ''}`}
         data-type={node.type}
       >
+        {/* Function Color Bar - Left vertical bar */}
+        <div 
+          className="function-color-bar"
+          style={{ 
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: '4px',
+            backgroundColor: getFunctionColor(),
+            borderTopLeftRadius: '6px',
+            borderBottomLeftRadius: '6px'
+          }}
+        />
+
         {/* Node Icon with Background Color */}
         <div className="node-icon" style={{ background: getNodeColor(node.type) }}>
           {getNodeIcon(node.type)}
@@ -431,7 +493,10 @@ const NodeComponent: React.FC<NodeComponentProps> = ({
         <div className="node-header">
           <div className="node-title-section">
             <div className="node-title">
-              {node.type.charAt(0).toUpperCase() + node.type.slice(1).replace('_', ' ')}
+              {node.type === 'function' 
+                ? (node.properties?.function_name || 'Function').charAt(0).toUpperCase() + (node.properties?.function_name || 'Function').slice(1)
+                : node.type.charAt(0).toUpperCase() + node.type.slice(1).replace('_', ' ')
+              }
             </div>
             <div 
               className="node-code-preview"

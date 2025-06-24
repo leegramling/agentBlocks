@@ -3,6 +3,7 @@ import type { Position } from '../types';
 
 interface NodePaletteProps {
   onAddNode: (type: string, position: Position) => void;
+  autoFocus?: boolean;
 }
 
 interface BlockDefinition {
@@ -14,12 +15,21 @@ interface BlockDefinition {
   blockMode: 'visual' | 'code' | 'hybrid' | 'ai';
 }
 
-const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
+const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode, autoFocus = false }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeMode, setActiveMode] = useState<'simple' | 'advanced'>('simple');
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus search input when palette is shown
+  useEffect(() => {
+    if (autoFocus && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100); // Small delay to ensure the component is fully rendered
+    }
+  }, [autoFocus]);
 
   const handleDragStart = (e: React.DragEvent, blockType: string) => {
     e.dataTransfer.setData('blockType', blockType);
@@ -94,6 +104,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
     { type: 'copy_file', name: 'Copy File', description: 'Copy files or directories', category: 'files', icon: '📋', blockMode: 'visual' },
     
     // Text Category
+    { type: 'grep', name: 'Grep Search', description: 'Search for patterns in text with Linux grep options', category: 'text', icon: '🔍', blockMode: 'visual' },
     { type: 'variable', name: 'Variable', description: 'Store and retrieve values', category: 'text', icon: '📦', blockMode: 'visual' },
     { type: 'print', name: 'Print', description: 'Output text to console', category: 'text', icon: '🖨️', blockMode: 'visual' },
     { type: 'text_transform', name: 'Transform Text', description: 'Modify text content', category: 'text', icon: '🔤', blockMode: 'visual' },

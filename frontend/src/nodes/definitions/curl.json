@@ -1,0 +1,107 @@
+{
+  "type": "curl",
+  "name": "HTTP Request",
+  "category": "network",
+  "version": "1.0",
+  "description": "Make HTTP requests and handle responses",
+  "icon": "🌐",
+  "color": "#10b981",
+  "properties": {
+    "url": {
+      "type": "string",
+      "label": "URL",
+      "description": "Target URL for the request",
+      "default": "https://api.example.com",
+      "required": true,
+      "placeholder": "https://api.example.com/data"
+    },
+    "method": {
+      "type": "select",
+      "label": "HTTP Method",
+      "description": "HTTP request method",
+      "default": "GET",
+      "options": [
+        { "value": "GET", "label": "GET" },
+        { "value": "POST", "label": "POST" },
+        { "value": "PUT", "label": "PUT" },
+        { "value": "DELETE", "label": "DELETE" },
+        { "value": "PATCH", "label": "PATCH" },
+        { "value": "HEAD", "label": "HEAD" },
+        { "value": "OPTIONS", "label": "OPTIONS" }
+      ]
+    },
+    "headers": {
+      "type": "textarea",
+      "label": "Headers",
+      "description": "HTTP headers (one per line: Key: Value)",
+      "default": "Content-Type: application/json\nUser-Agent: AgentBlocks/1.0",
+      "placeholder": "Authorization: Bearer token\nContent-Type: application/json"
+    },
+    "body": {
+      "type": "textarea",
+      "label": "Request Body",
+      "description": "Request body content",
+      "default": "",
+      "placeholder": "{\"key\": \"value\"}",
+      "conditional": {
+        "field": "method",
+        "value": "POST"
+      }
+    },
+    "timeout": {
+      "type": "number",
+      "label": "Timeout (seconds)",
+      "description": "Request timeout",
+      "default": 30,
+      "min": 1,
+      "max": 300
+    },
+    "follow_redirects": {
+      "type": "boolean",
+      "label": "Follow Redirects",
+      "description": "Automatically follow HTTP redirects",
+      "default": true
+    },
+    "verify_ssl": {
+      "type": "boolean",
+      "label": "Verify SSL",
+      "description": "Verify SSL certificates",
+      "default": true
+    }
+  },
+  "inputs": [
+    {
+      "name": "body_data",
+      "type": "string",
+      "label": "Body Data",
+      "description": "Dynamic request body content",
+      "optional": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "response_body",
+      "type": "string",
+      "label": "Response Body",
+      "description": "HTTP response body content"
+    },
+    {
+      "name": "status_code",
+      "type": "number",
+      "label": "Status Code",
+      "description": "HTTP response status code"
+    },
+    {
+      "name": "headers",
+      "type": "object",
+      "label": "Response Headers",
+      "description": "HTTP response headers"
+    },
+    {
+      "name": "success",
+      "type": "boolean",
+      "label": "Success",
+      "description": "Whether request was successful"
+    }
+  ]
+}

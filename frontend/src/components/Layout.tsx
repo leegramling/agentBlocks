@@ -11,10 +11,12 @@ interface LayoutProps {
   nodes?: any[];
   onExecute?: () => void;
   onClearConsole?: () => void;
-  onGenerateCode?: () => string;
+  onGeneratePythonCode?: () => string;
+  onGenerateRustCode?: () => string;
   onSave?: () => void;
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
   onImportWorkflow?: (workflowData: any) => void;
+  onExport?: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -25,10 +27,12 @@ const Layout: React.FC<LayoutProps> = ({
   nodes,
   onExecute, 
   onClearConsole,
-  onGenerateCode,
+  onGeneratePythonCode,
+  onGenerateRustCode,
   onSave,
   onConsoleOutput,
-  onImportWorkflow
+  onImportWorkflow,
+  onExport
 }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
   return (
@@ -56,7 +60,7 @@ const Layout: React.FC<LayoutProps> = ({
           >
             Execute
           </button>
-          <button className="action-button btn-export">Export</button>
+          <button className="action-button btn-export" onClick={onExport}>Export</button>
         </div>
       </div>
 
@@ -101,7 +105,7 @@ const Layout: React.FC<LayoutProps> = ({
         onConsoleOutput={onConsoleOutput} 
         onImportWorkflow={onImportWorkflow}
         nodes={nodes}
-        generatePythonCode={onGenerateCode}
+        generatePythonCode={onGeneratePythonCode}
       />
 
       {/* Console Panel */}
@@ -110,7 +114,8 @@ const Layout: React.FC<LayoutProps> = ({
         isExecuting={isExecuting}
         onExecute={onExecute || (() => {})}
         onClear={onClearConsole || (() => {})}
-        onGenerateCode={onGenerateCode}
+        onGeneratePythonCode={onGeneratePythonCode}
+        onGenerateRustCode={onGenerateRustCode}
       />
 
       {/* Help Modal */}

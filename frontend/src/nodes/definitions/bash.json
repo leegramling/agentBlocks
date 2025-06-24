@@ -1,0 +1,87 @@
+{
+  "type": "bash",
+  "name": "Shell Command",
+  "category": "system",
+  "version": "1.0",
+  "description": "Execute shell commands and capture output",
+  "icon": "💻",
+  "color": "#3b82f6",
+  "properties": {
+    "command": {
+      "type": "textarea",
+      "label": "Command",
+      "description": "Shell command to execute",
+      "default": "echo 'Hello World'",
+      "required": true,
+      "placeholder": "ls -la"
+    },
+    "working_directory": {
+      "type": "string",
+      "label": "Working Directory",
+      "description": "Directory to execute command in",
+      "default": "",
+      "placeholder": "/home/user"
+    },
+    "timeout": {
+      "type": "number",
+      "label": "Timeout (seconds)",
+      "description": "Maximum execution time",
+      "default": 30,
+      "min": 1,
+      "max": 300
+    },
+    "capture_output": {
+      "type": "boolean",
+      "label": "Capture Output",
+      "description": "Capture stdout and stderr",
+      "default": true
+    },
+    "shell": {
+      "type": "select",
+      "label": "Shell",
+      "description": "Shell to use for execution",
+      "default": "bash",
+      "options": [
+        { "value": "bash", "label": "Bash" },
+        { "value": "sh", "label": "Shell" },
+        { "value": "zsh", "label": "Zsh" },
+        { "value": "fish", "label": "Fish" }
+      ]
+    }
+  },
+  "inputs": [
+    {
+      "name": "stdin",
+      "type": "string",
+      "label": "Standard Input",
+      "description": "Text to pipe to command stdin",
+      "optional": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "stdout",
+      "type": "string",
+      "label": "Standard Output",
+      "description": "Command stdout output"
+    },
+    {
+      "name": "stderr",
+      "type": "string",
+      "label": "Standard Error",
+      "description": "Command stderr output"
+    },
+    {
+      "name": "exit_code",
+      "type": "number",
+      "label": "Exit Code",
+      "description": "Command exit status code"
+    },
+    {
+      "name": "success",
+      "type": "boolean",
+      "label": "Success",
+      "description": "Whether command executed successfully"
+    }
+  ]
+}

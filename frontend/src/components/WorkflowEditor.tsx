@@ -1,13 +1,14 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import type { WorkflowNode, Connection, Position, WorkflowPanel } from '../types';
+import type { WorkflowNode, Connection, Position } from '../types';
 import NodeComponent from './NodeComponent';
 import ConnectionLine from './ConnectionLine';
 import NodePalette from './NodePalette';
 import PropertiesPanel, { type PropertiesPanelRef } from './PropertiesPanel';
-import PanelComponent from './PanelComponent';
-import PanelModal from './PanelModal';
 import CanvasPropertyPanel from './CanvasPropertyPanel';
 import { toPythonFString, hasVariableReferences } from '../utils/variableSubstitution';
+import { PythonNodeGenerator } from '../nodes/generators/PythonNodeGenerator';
+import { RustNodeGenerator } from '../nodes/generators/RustNodeGenerator';
+import { WorkflowExporter } from '../nodes/WorkflowExporter';
 
 interface WorkflowEditorProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
@@ -15,9 +16,11 @@ interface WorkflowEditorProps {
   onNodeCountChange?: (count: number) => void;
   onNodesChange?: (nodes: WorkflowNode[]) => void;
   onRegisterExecute?: (callback: () => void) => void;
-  onRegisterGenerateCode?: (callback: () => string) => void;
+  onRegisterGeneratePythonCode?: (callback: () => string) => void;
+  onRegisterGenerateRustCode?: (callback: () => string) => void;
   onRegisterSave?: (callback: () => void) => void;
   onRegisterImportWorkflow?: (callback: (workflowData: any) => void) => void;
+  onRegisterExport?: (callback: () => void) => void;
 }
 
 const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
@@ -26,49 +29,58 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   onNodeCountChange,
   onNodesChange,
   onRegisterExecute,
-  onRegisterGenerateCode,
+  onRegisterGeneratePythonCode,
+  onRegisterGenerateRustCode,
   onRegisterSave,
-  onRegisterImportWorkflow
+  onRegisterImportWorkflow,
+  onRegisterExport
 }) => {
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [panels, setPanels] = useState<WorkflowPanel[]>([]);
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
-  const [selectedPanel, setSelectedPanel] = useState<WorkflowPanel | null>(null);
+  const [activeFunctionId, setActiveFunctionId] = useState<string>('main-function');
   const [connecting, setConnecting] = useState<{
     nodeId: string;
     outputId: string;
   } | null>(null);
-  const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [showPanelModal, setShowPanelModal] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(true);
   const [showCanvasPropertyPanel, setShowCanvasPropertyPanel] = useState(false);
+  const [showNodePalette, setShowNodePalette] = useState(false);
+  const [showInsertPopup, setShowInsertPopup] = useState(false);
+  const [insertSearchTerm, setInsertSearchTerm] = useState('');
+  const [selectedInsertIndex, setSelectedInsertIndex] = useState(0);
+  const [searchResults, setSearchResults] = useState<WorkflowNode[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const [commandFieldValue, setCommandFieldValue] = useState('');
+  const [isCommandFieldFocused, setIsCommandFieldFocused] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const propertiesPanelRef = useRef<PropertiesPanelRef>(null);
+  const commandFieldRef = useRef<HTMLInputElement>(null);
   
   // Refs to capture current state for callbacks
   const nodesRef = useRef<WorkflowNode[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
   
-  // Initialize with main panel and try to restore from localStorage
+  // Initialize with main function and try to restore from localStorage
   useEffect(() => {
-    if (panels.length === 0) {
+    if (nodes.length === 0) {
       // Try to restore from localStorage first
       try {
         const savedWorkflow = localStorage.getItem('agentblocks_workflow');
         if (savedWorkflow) {
           const workflowData = JSON.parse(savedWorkflow);
-          if (workflowData.nodes && workflowData.panels) {
+          if (workflowData.nodes) {
             setNodes(workflowData.nodes);
             setConnections(workflowData.connections || []);
-            setPanels(workflowData.panels);
-            setSelectedPanel(workflowData.panels[0]);
+            // Find the main function or set the first function as active
+            const mainFunction = workflowData.nodes.find((n: WorkflowNode) => n.type === 'function' && n.properties?.function_name === 'main');
+            const firstFunction = workflowData.nodes.find((n: WorkflowNode) => n.type === 'function');
+            setActiveFunctionId(mainFunction?.id || firstFunction?.id || 'main-function');
             onConsoleOutput?.(prev => [...prev, `🔄 Restored workflow from browser storage (${workflowData.nodes.length} nodes)`]);
             return;
           }
@@ -77,20 +89,26 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         onConsoleOutput?.(prev => [...prev, `⚠️ Could not restore from storage: ${error}`]);
       }
       
-      // If no saved workflow, create default main panel
-      const mainPanel: WorkflowPanel = {
-        id: 'main-panel',
-        name: 'Main',
-        type: 'main',
+      // If no saved workflow, create default main function
+      const mainFunction: WorkflowNode = {
+        id: 'main-function',
+        type: 'function',
         position: { x: 100, y: 100 },
-        size: { width: 400, height: 300 },
-        color: '#3b82f6',
-        isExpanded: true
+        panelId: undefined,
+        properties: {
+          function_name: 'main',
+          parameters: '',
+          return_type: 'void',
+          description: 'Main function - entry point of the workflow'
+        },
+        inputs: [],
+        outputs: [{ id: 'output', name: 'Output', type: 'any' }],
       };
-      setPanels([mainPanel]);
-      setSelectedPanel(mainPanel);
+      setNodes([mainFunction]);
+      setActiveFunctionId('main-function');
+      onConsoleOutput?.(prev => [...prev, '🎯 Created default main function']);
     }
-  }, [panels.length, onConsoleOutput]);
+  }, [nodes.length, onConsoleOutput]);
   
   // Update refs when state changes
   useEffect(() => {
@@ -107,9 +125,24 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onNodesChange?.(nodes);
   }, [nodes, onNodesChange]);
 
+
   const handleNodeSelect = useCallback((node: WorkflowNode) => {
     setSelectedNode(node);
-  }, []);
+    
+    // If clicking on a function node, make it the active function
+    if (node.type === 'function') {
+      setActiveFunctionId(node.id);
+      onConsoleOutput?.(prev => [...prev, `🎯 Switched to function: ${node.properties?.function_name || node.id}`]);
+    }
+    // If clicking on a child node, make its parent function active
+    else if (node.parentId) {
+      const parentFunction = nodes.find(n => n.id === node.parentId && n.type === 'function');
+      if (parentFunction) {
+        setActiveFunctionId(node.parentId);
+        onConsoleOutput?.(prev => [...prev, `🎯 Switched to function: ${parentFunction.properties?.function_name || node.parentId}`]);
+      }
+    }
+  }, [nodes, onConsoleOutput]);
 
   const handleRefreshCanvas = useCallback(() => {
     // Force a re-render of all nodes by updating their keys/positions slightly
@@ -122,14 +155,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       }
     })));
     
-    // Also refresh panel positions slightly to force re-render
-    setPanels(prev => prev.map(panel => ({
-      ...panel,
-      position: {
-        x: Math.round(panel.position.x + (Math.random() - 0.5) * 0.001),
-        y: Math.round(panel.position.y + (Math.random() - 0.5) * 0.001)
-      }
-    })));
     
     onConsoleOutput?.(prev => [...prev, '🔄 Canvas refreshed - all nodes redrawn']);
   }, [onConsoleOutput]);
@@ -137,49 +162,100 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const handleNodeDrag = useCallback((nodeId: string, position: Position) => {
     setNodes(prev => prev.map(node => {
       if (node.id === nodeId) {
-        const updatedNode = { ...node, position };
-        
-        // Update panel position when nodes move (nodes should move panels)
-        const panel = panels.find(p => p.id === node.panelId);
-        if (panel) {
-          const panelNodes = prev.filter(n => n.panelId === panel.id);
-          if (panelNodes.length === 1) {
-            // If this is the only node, move the panel with it
-            const newPanelPosition = {
-              x: position.x - 16, // Account for panel padding
-              y: position.y - 56  // Account for panel header + padding
-            };
-            setPanels(prevPanels => prevPanels.map(p => 
-              p.id === panel.id ? { ...p, position: newPanelPosition } : p
-            ));
-          }
-        }
-        
-        return updatedNode;
+        return { ...node, position };
       }
       return node;
     }));
-  }, [panels]);
+  }, []);
 
-  const handleAddNode = useCallback((type: string, position: Position, panelId?: string, insertAfterNodeId?: string) => {
-    const targetPanelId = panelId || selectedPanel?.id || 'main-panel';
-    const targetPanel = panels.find(p => p.id === targetPanelId);
-    
-    // Position is relative to panel if panelId is provided
+  const handleAddNode = useCallback((type: string, position: Position, functionId?: string) => {
     let nodePosition = { ...position };
-    if (panelId && targetPanel) {
-      // Convert relative position to absolute
-      nodePosition = {
-        x: targetPanel.position.x + position.x,
-        y: targetPanel.position.y + 40 + position.y // Add header height
-      };
+    let parentId: string | undefined;
+    let newNodeId = `node_${Date.now()}`;
+    
+    // Special handling for function nodes
+    if (type === 'function') {
+      const targetFunctionId = functionId || activeFunctionId;
+      const activeFunction = nodes.find(n => n.id === targetFunctionId);
+      
+      // If we're dropping a function inside another function, create a function call/instance
+      if (activeFunction && targetFunctionId !== undefined) {
+        // Check if any existing function has the default name that would be assigned
+        const defaultProps = getDefaultProperties('function');
+        const defaultFunctionName = defaultProps.function_name || 'myFunction';
+        const existingFunction = nodes.find(n => 
+          n.type === 'function' && 
+          n.properties?.function_name === defaultFunctionName
+        );
+        
+        if (existingFunction) {
+          // Create a function call node instead of a new function
+          type = 'function_call'; // Change the type to function call
+          parentId = targetFunctionId;
+          
+          // Position it like a regular node inside the function
+          const functionNodes = nodes.filter(n => n.parentId === targetFunctionId);
+          const nodeHeight = 66; // min-height (50px) + padding (16px)
+          const baseY = activeFunction.position.y + nodeHeight;
+          nodePosition = {
+            x: activeFunction.position.x + 20,
+            y: baseY + (functionNodes.length * nodeHeight)
+          };
+          
+          onConsoleOutput?.(prev => [...prev, `📞 Creating function call to existing function: ${defaultFunctionName}`]);
+        } else {
+          // Create a new function definition but as a child of the current function
+          parentId = targetFunctionId;
+          newNodeId = `function_${Date.now()}`;
+          
+          const functionNodes = nodes.filter(n => n.parentId === targetFunctionId);
+          const nodeHeight = 66; // min-height (50px) + padding (16px)
+          const baseY = activeFunction.position.y + nodeHeight;
+          nodePosition = {
+            x: activeFunction.position.x + 20,
+            y: baseY + (functionNodes.length * nodeHeight)
+          };
+        }
+      } else {
+        // Function nodes dropped outside any function create new function chains
+        parentId = undefined;
+        newNodeId = `function_${Date.now()}`;
+        
+        // Position function nodes independently on the canvas
+        const existingFunctions = nodes.filter(n => n.type === 'function');
+        if (existingFunctions.length > 0) {
+          const rightmostFunction = existingFunctions.reduce((rightmost, func) => 
+            func.position.x > rightmost.position.x ? func : rightmost
+          );
+          nodePosition = {
+            x: rightmostFunction.position.x + 300,
+            y: rightmostFunction.position.y
+          };
+        }
+      }
+    } else {
+      // Regular nodes attach to the active function
+      const targetFunctionId = functionId || activeFunctionId;
+      const activeFunction = nodes.find(n => n.id === targetFunctionId);
+      parentId = targetFunctionId;
+      
+      if (activeFunction) {
+        // Position new nodes below the function, creating a vertical layout with no gaps
+        const functionNodes = nodes.filter(n => n.parentId === targetFunctionId);
+        const nodeHeight = 66; // min-height (50px) + padding (16px)
+        const baseY = activeFunction.position.y + nodeHeight; // Start immediately below function
+        nodePosition = {
+          x: activeFunction.position.x + 20, // Slight indent
+          y: baseY + (functionNodes.length * nodeHeight) // Stack nodes with no gaps
+        };
+      }
     }
 
     const newNode: WorkflowNode = {
-      id: `node_${Date.now()}`,
+      id: newNodeId,
       type,
       position: nodePosition,
-      panelId: targetPanelId,
+      parentId,
       properties: getDefaultProperties(type),
       inputs: getDefaultInputs(type),
       outputs: getDefaultOutputs(type),
@@ -187,13 +263,314 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     
     setNodes(prev => [...prev, newNode]);
     
-    // Expand panel if it was collapsed
-    if (targetPanel && !targetPanel.isExpanded) {
-      setPanels(prevPanels => prevPanels.map(panel => 
-        panel.id === targetPanelId ? { ...panel, isExpanded: true } : panel
-      ));
+    // Auto-connect nodes in function chains (except for function nodes themselves)
+    if (type !== 'function' && parentId) {
+      const functionNodes = nodes.filter(n => n.parentId === parentId);
+      if (functionNodes.length > 0) {
+        // Find the last node in the function (the one with the highest y position)
+        const lastNode = functionNodes.reduce((prev, current) => 
+          current.position.y > prev.position.y ? current : prev
+        );
+        
+        // Create a connection from the last node's output to the new node's input
+        const lastNodeOutputs = lastNode.outputs || [];
+        const newNodeInputs = newNode.inputs || [];
+        
+        if (lastNodeOutputs.length > 0 && newNodeInputs.length > 0) {
+          const newConnection: Connection = {
+            id: `conn_${Date.now()}`,
+            source_node: lastNode.id,
+            source_output: lastNodeOutputs[0].id, // Use first output
+            target_node: newNode.id,
+            target_input: newNodeInputs[0].id, // Use first input
+          };
+          
+          setConnections(prev => [...prev, newConnection]);
+          onConsoleOutput?.(prev => [...prev, `🔗 Auto-connected ${lastNode.type} → ${newNode.type}`]);
+        }
+      }
     }
-  }, [nodes, selectedPanel, panels]);
+    
+    // If we added a function node, make it the active function
+    if (type === 'function') {
+      setActiveFunctionId(newNodeId);
+      onConsoleOutput?.(prev => [...prev, `🔧 Created new function chain: ${newNode.properties?.function_name || 'unnamed'}`]);
+    } else {
+      const activeFunction = nodes.find(n => n.id === parentId);
+      onConsoleOutput?.(prev => [...prev, `➕ Added ${type} node to function ${activeFunction?.properties?.function_name || 'unknown'}`]);
+      
+      // Debug: Print JSON structure for main function and its children
+      if (activeFunction?.properties?.function_name === 'main') {
+        const mainChildren = [...nodes, newNode].filter(n => n.parentId === activeFunction.id);
+        const debugInfo = {
+          mainFunction: {
+            id: activeFunction.id,
+            name: activeFunction.properties?.function_name,
+            position: activeFunction.position
+          },
+          children: mainChildren.map(child => ({
+            id: child.id,
+            type: child.type,
+            parentId: child.parentId,
+            position: child.position,
+            properties: child.properties
+          }))
+        };
+        console.log('📊 Main function structure:', JSON.stringify(debugInfo, null, 2));
+        onConsoleOutput?.(prev => [...prev, `📊 Main has ${mainChildren.length} children: ${mainChildren.map(c => c.type).join(', ')}`]);
+      }
+    }
+    
+    // Hide the node palette after adding a node
+    setShowNodePalette(false);
+  }, [nodes, activeFunctionId, onConsoleOutput]);
+
+  // Insert node after selected node
+  const handleInsertNode = useCallback((nodeType: string) => {
+    if (!selectedNode) {
+      // If no node is selected, insert at the end of the active function
+      const activeFunction = nodes.find(n => n.id === activeFunctionId);
+      if (activeFunction) {
+        const functionChildren = nodes.filter(n => n.parentId === activeFunctionId);
+        const nodeHeight = 66;
+        const insertPosition = {
+          x: activeFunction.position.x + 20,
+          y: activeFunction.position.y + nodeHeight + (functionChildren.length * nodeHeight)
+        };
+        handleAddNode(nodeType, insertPosition, activeFunctionId);
+        setShowInsertPopup(false);
+        setInsertSearchTerm('');
+        onConsoleOutput?.(prev => [...prev, `📥 Inserted ${nodeType} at end of ${activeFunction.properties?.function_name || 'function'}`]);
+        return;
+      } else {
+        onConsoleOutput?.(prev => [...prev, '⚠️ No active function found for insertion']);
+        return;
+      }
+    }
+
+    // Find the position after the selected node
+    let insertPosition: Position;
+    
+    if (selectedNode.parentId) {
+      // Get all sibling nodes in the same function
+      const siblings = nodes.filter(n => n.parentId === selectedNode.parentId);
+      const selectedIndex = siblings.findIndex(n => n.id === selectedNode.id);
+      
+      // Position the new node below the selected node
+      const nodeHeight = 66;
+      insertPosition = {
+        x: selectedNode.position.x,
+        y: selectedNode.position.y + nodeHeight
+      };
+      
+      // Shift all nodes below the insertion point down
+      const nodesToShift = siblings.slice(selectedIndex + 1);
+      nodesToShift.forEach(node => {
+        setNodes(prev => prev.map(n => 
+          n.id === node.id 
+            ? { ...n, position: { ...n.position, y: n.position.y + nodeHeight } }
+            : n
+        ));
+      });
+    } else {
+      // If selected node is a function, add below it
+      const nodeHeight = 66;
+      insertPosition = {
+        x: selectedNode.position.x + 20,
+        y: selectedNode.position.y + nodeHeight
+      };
+    }
+
+    // Add the new node
+    handleAddNode(nodeType, insertPosition, selectedNode.parentId || selectedNode.id);
+    
+    setShowInsertPopup(false);
+    setInsertSearchTerm('');
+    
+    onConsoleOutput?.(prev => [...prev, `📥 Inserted ${nodeType} after ${selectedNode.type}`]);
+  }, [selectedNode, nodes, handleAddNode, onConsoleOutput, activeFunctionId]);
+
+  // Navigate to previous node (up/k)
+  const selectPreviousNode = useCallback(() => {
+    if (nodes.length === 0) return;
+    
+    // Get all nodes in display order (functions first, then their children)
+    const orderedNodes: WorkflowNode[] = [];
+    
+    // Add function nodes first
+    const functionNodes = nodes.filter(n => n.type === 'function').sort((a, b) => a.position.x - b.position.x);
+    functionNodes.forEach(fn => {
+      orderedNodes.push(fn);
+      // Add children of this function
+      const children = nodes.filter(n => n.parentId === fn.id).sort((a, b) => a.position.y - b.position.y);
+      orderedNodes.push(...children);
+    });
+    
+    if (orderedNodes.length === 0) return;
+    
+    if (!selectedNode) {
+      // Select first node
+      handleNodeSelect(orderedNodes[0]);
+      return;
+    }
+    
+    const currentIndex = orderedNodes.findIndex(n => n.id === selectedNode.id);
+    if (currentIndex > 0) {
+      handleNodeSelect(orderedNodes[currentIndex - 1]);
+    } else {
+      // Wrap to last node
+      handleNodeSelect(orderedNodes[orderedNodes.length - 1]);
+    }
+  }, [nodes, selectedNode, handleNodeSelect]);
+
+  // Navigate to next node (down/j)
+  const selectNextNode = useCallback(() => {
+    if (nodes.length === 0) return;
+    
+    // Get all nodes in display order (functions first, then their children)
+    const orderedNodes: WorkflowNode[] = [];
+    
+    // Add function nodes first
+    const functionNodes = nodes.filter(n => n.type === 'function').sort((a, b) => a.position.x - b.position.x);
+    functionNodes.forEach(fn => {
+      orderedNodes.push(fn);
+      // Add children of this function
+      const children = nodes.filter(n => n.parentId === fn.id).sort((a, b) => a.position.y - b.position.y);
+      orderedNodes.push(...children);
+    });
+    
+    if (orderedNodes.length === 0) return;
+    
+    if (!selectedNode) {
+      // Select first node
+      handleNodeSelect(orderedNodes[0]);
+      return;
+    }
+    
+    const currentIndex = orderedNodes.findIndex(n => n.id === selectedNode.id);
+    if (currentIndex < orderedNodes.length - 1) {
+      handleNodeSelect(orderedNodes[currentIndex + 1]);
+    } else {
+      // Wrap to first node
+      handleNodeSelect(orderedNodes[0]);
+    }
+  }, [nodes, selectedNode, handleNodeSelect]);
+
+  // Search functionality
+  const performSearch = useCallback((term: string) => {
+    if (!term.trim()) {
+      setSearchResults([]);
+      setCurrentSearchIndex(0);
+      return;
+    }
+
+    const results = nodes.filter(node => {
+      const searchableText = [
+        node.type,
+        node.properties?.function_name,
+        node.properties?.name,
+        node.properties?.message,
+        node.properties?.variable,
+        node.properties?.command,
+        node.properties?.code,
+        node.id
+      ].filter(Boolean).join(' ').toLowerCase();
+      
+      return searchableText.includes(term.toLowerCase());
+    });
+
+    setSearchResults(results);
+    setCurrentSearchIndex(0);
+    
+    if (results.length > 0) {
+      handleNodeSelect(results[0]);
+      onConsoleOutput?.(prev => [...prev, `🔍 Found ${results.length} matches for "${term}"`]);
+    } else {
+      onConsoleOutput?.(prev => [...prev, `❌ No matches found for "${term}"`]);
+    }
+  }, [nodes, handleNodeSelect, onConsoleOutput]);
+
+  const findNext = useCallback(() => {
+    if (searchResults.length === 0) return;
+    
+    const nextIndex = (currentSearchIndex + 1) % searchResults.length;
+    setCurrentSearchIndex(nextIndex);
+    handleNodeSelect(searchResults[nextIndex]);
+    onConsoleOutput?.(prev => [...prev, `🔍 Match ${nextIndex + 1} of ${searchResults.length}`]);
+  }, [searchResults, currentSearchIndex, handleNodeSelect, onConsoleOutput]);
+
+  const findPrevious = useCallback(() => {
+    if (searchResults.length === 0) return;
+    
+    const prevIndex = currentSearchIndex === 0 ? searchResults.length - 1 : currentSearchIndex - 1;
+    setCurrentSearchIndex(prevIndex);
+    handleNodeSelect(searchResults[prevIndex]);
+    onConsoleOutput?.(prev => [...prev, `🔍 Match ${prevIndex + 1} of ${searchResults.length}`]);
+  }, [searchResults, currentSearchIndex, handleNodeSelect, onConsoleOutput]);
+
+  // Keyboard handler for F2, 'i', navigation keys (moved after function definitions)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle most shortcuts if command field is focused (except specific ones)
+      if (isCommandFieldFocused) {
+        if (e.key === 'Escape') {
+          commandFieldRef.current?.blur();
+          setIsCommandFieldFocused(false);
+        }
+        return;
+      }
+
+      // Don't handle navigation if popup is open
+      if (showInsertPopup || showNodePalette) {
+        if (e.key === 'F2') {
+          e.preventDefault();
+          setShowNodePalette(prev => !prev);
+        } else if (e.key === 'Escape') {
+          setShowInsertPopup(false);
+          setShowNodePalette(false);
+          setInsertSearchTerm('');
+          setSelectedInsertIndex(0);
+        }
+        return;
+      }
+
+      // Handle global keyboard shortcuts
+      if (e.key === 'F2') {
+        e.preventDefault();
+        setShowNodePalette(prev => !prev);
+      } else if (e.key === 'i' && !isCommandFieldFocused) {
+        e.preventDefault();
+        setShowInsertPopup(true);
+        setInsertSearchTerm('');
+        setSelectedInsertIndex(0);
+      } else if (e.key === 'Escape') {
+        setShowInsertPopup(false);
+        setShowNodePalette(false);
+        setInsertSearchTerm('');
+        setSelectedInsertIndex(0);
+      } else if ((e.key === 'ArrowUp' || e.key === 'k') && !isCommandFieldFocused) {
+        e.preventDefault();
+        selectPreviousNode();
+      } else if ((e.key === 'ArrowDown' || e.key === 'j') && !isCommandFieldFocused) {
+        e.preventDefault();
+        selectNextNode();
+      } else if (e.key === '/' || (e.ctrlKey && e.key === 'f')) {
+        e.preventDefault();
+        // Focus the command field instead of opening popup
+        commandFieldRef.current?.focus();
+        setIsCommandFieldFocused(true);
+      } else if (e.key === 'n' && searchResults.length > 0) {
+        e.preventDefault();
+        findNext();
+      } else if (e.key === 'N' && searchResults.length > 0) {
+        e.preventDefault();
+        findPrevious();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showInsertPopup, showNodePalette, selectPreviousNode, selectNextNode, searchResults.length, findNext, findPrevious, isCommandFieldFocused]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -211,80 +588,10 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         y: (viewportDropPosition.y - canvasPan.y) / canvasZoom
       };
       
-      // Check if the drop is over any existing panel (using canvas coordinates)
-      const droppedOnPanel = panels.find(panel => {
-        const panelLeft = panel.position.x;
-        const panelTop = panel.position.y;
-        const panelRight = panelLeft + panel.size.width;
-        const panelBottom = panelTop + panel.size.height;
-        
-        return canvasDropPosition.x >= panelLeft && 
-               canvasDropPosition.x <= panelRight && 
-               canvasDropPosition.y >= panelTop && 
-               canvasDropPosition.y <= panelBottom;
-      });
-      
-      // If dropped on an existing panel, let the panel handle it
-      if (droppedOnPanel) {
-        return; // Panel's drop handler will take care of this
-      }
-      
-      // First, create the node on the canvas using the normal flow
+      // Add node to the active function
       handleAddNode(blockType, canvasDropPosition);
-      
-      // Then, immediately create a module around it and move the node into the module
-      setTimeout(() => {
-        const moduleCount = panels.filter(p => p.type === 'module').length;
-        const moduleName = `Module${String(moduleCount + 1).padStart(2, '0')}`;
-        
-        const newPanel: WorkflowPanel = {
-          id: `module_${Date.now()}`,
-          name: moduleName,
-          type: 'module',
-          position: { 
-            x: canvasDropPosition.x - 140, // Center panel on drop position
-            y: canvasDropPosition.y - 40
-          },
-          size: { width: 280, height: 120 },
-          color: '#8b5cf6',
-          isExpanded: true
-        };
-        
-        // Add the new panel
-        setPanels(prev => [...prev, newPanel]);
-        setSelectedPanel(newPanel);
-        
-        // Find the node we just created (it should be the most recent one at this position)
-        setNodes(prevNodes => {
-          const recentNode = prevNodes
-            .filter(node => !node.panelId && 
-                           Math.abs(node.position.x - canvasDropPosition.x) < 10 &&
-                           Math.abs(node.position.y - canvasDropPosition.y) < 10)
-            .sort((a, b) => parseInt(b.id.split('_')[1]) - parseInt(a.id.split('_')[1]))[0];
-          
-          if (recentNode) {
-            // Move the node into the panel
-            return prevNodes.map(node => {
-              if (node.id === recentNode.id) {
-                return {
-                  ...node,
-                  panelId: newPanel.id,
-                  position: {
-                    x: newPanel.position.x + 16, // Panel position + padding
-                    y: newPanel.position.y + 56  // Panel position + header + padding
-                  }
-                };
-              }
-              return node;
-            });
-          }
-          return prevNodes;
-        });
-        
-        onConsoleOutput?.(prev => [...prev, `📦 Created ${moduleName} with ${blockType} node`]);
-      }, 50); // Slightly longer delay to ensure node creation completes
     }
-  }, [handleAddNode, panels, onConsoleOutput, canvasPan, canvasZoom]);
+  }, [handleAddNode, canvasPan, canvasZoom]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -305,7 +612,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       case 'while':
         return { condition: 'counter < 10' };
       case 'function':
-        return { name: 'myFunction', parameters: 'param1, param2' };
+        return { function_name: 'myFunction', parameters: 'param1, param2', return_type: 'void' };
+      case 'function_call':
+        return { function_name: 'myFunction', arguments: '' };
       case 'execute':
         return { command: 'print("Executing...")' };
       case 'increment':
@@ -337,344 +646,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [connecting]);
 
-  const generatePythonCodeFromNodes = useCallback((nodeList: WorkflowNode[]) => {
-    if (nodeList.length === 0) return '';
-    
-    let code = '# Generated Python Code\n';
-    
-    // Helper function to generate code for a single node with proper indentation
-    const generateNodeCode = (node: WorkflowNode, indentLevel: number = 0): string => {
-      const indent = '    '.repeat(indentLevel);
-      
-      switch (node.type) {
-        case 'variable':
-          const varName = node.properties.name || 'myVariable';
-          const varValue = node.properties.value || 'hello world';
-          // Support variable references in values
-          if (hasVariableReferences(varValue)) {
-            return `${indent}${varName} = ${toPythonFString(varValue)}\n`;
-          }
-          // If it's a simple variable reference, use it directly
-          else if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varValue)) {
-            return `${indent}${varName} = ${varValue}\n`;
-          }
-          return `${indent}${varName} = "${varValue}"\n`;
-        case 'print':
-          const message = node.properties.message || 'myVariable';
-          // Check if it contains variable references {variable}
-          if (hasVariableReferences(message)) {
-            return `${indent}print(${toPythonFString(message)})\n`;
-          }
-          // If message is just a variable name (no quotes), use it directly
-          else if (message && !message.includes('"') && !message.includes("'") && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(message)) {
-            return `${indent}print(${message})\n`;
-          } else {
-            return `${indent}print("${message}")\n`;
-          }
-        case 'assignment':
-          const assignVar = node.properties.variable || 'result';
-          const expression = node.properties.expression || 'value';
-          return `${indent}${assignVar} = ${expression}\n`;
-        case 'if-then':
-          const condition = node.properties.condition || 'True';
-          let ifCode = `${indent}if ${condition}:\n`;
-          const ifChildren = getChildNodes(node.id);
-          if (ifChildren.length > 0) {
-            ifChildren.forEach(child => {
-              ifCode += generateNodeCode(child, indentLevel + 1);
-            });
-          } else {
-            ifCode += `${indent}    pass  # Add code here\n`;
-          }
-          return ifCode;
-        case 'foreach':
-          const iterable = node.properties.iterable || 'items';
-          const loopVar = node.properties.variable || 'item';
-          let forCode = `${indent}for ${loopVar} in ${iterable}:\n`;
-          const forChildren = getChildNodes(node.id);
-          if (forChildren.length > 0) {
-            forChildren.forEach(child => {
-              forCode += generateNodeCode(child, indentLevel + 1);
-            });
-          } else {
-            forCode += `${indent}    pass  # Add code here\n`;
-          }
-          return forCode;
-        case 'while':
-          const whileCondition = node.properties.condition || 'True';
-          let whileCode = `${indent}while ${whileCondition}:\n`;
-          const whileChildren = getChildNodes(node.id);
-          if (whileChildren.length > 0) {
-            whileChildren.forEach(child => {
-              whileCode += generateNodeCode(child, indentLevel + 1);
-            });
-          } else {
-            whileCode += `${indent}    pass  # Add code here\n`;
-          }
-          return whileCode;
-        case 'function':
-          const funcName = node.properties.name || 'myFunction';
-          const params = node.properties.parameters || '';
-          let funcCode = `${indent}def ${funcName}(${params}):\n`;
-          const funcChildren = getChildNodes(node.id);
-          if (funcChildren.length > 0) {
-            funcChildren.forEach(child => {
-              funcCode += generateNodeCode(child, indentLevel + 1);
-            });
-          } else {
-            funcCode += `${indent}    pass  # Add code here\n`;
-          }
-          return funcCode;
-        case 'execute':
-          const command = node.properties.command || 'print("Executing...")';
-          return `${indent}${command}\n`;
-        case 'list_create':
-          const listName = node.properties.name || 'my_list';
-          const itemsText = node.properties.items || 'apple\norange\npear';
-          const itemsArray = itemsText.split('\n').filter((item: string) => item.trim()).map((item: string) => `"${item.trim()}"`);
-          return `${indent}${listName} = [${itemsArray.join(', ')}]\n`;
-        case 'list_append':
-          const targetList = node.properties.list || 'my_list';
-          const appendItem = node.properties.item || 'item';
-          return `${indent}${targetList}.append(${appendItem})\n`;
-        case 'list_get':
-          const getList = node.properties.list || 'my_list';
-          const getIndex = node.properties.index || '0';
-          const getVar = node.properties.variable || 'item';
-          return `${indent}${getVar} = ${getList}[${getIndex}]\n`;
-        case 'list_length':
-          const lengthList = node.properties.list || 'my_list';
-          const lengthVar = node.properties.variable || 'length';
-          return `${indent}${lengthVar} = len(${lengthList})\n`;
-        case 'list_comprehension':
-          const compVar = node.properties.variable || 'result';
-          const compExpression = node.properties.expression || 'x';
-          const compIterable = node.properties.iterable || 'range(10)';
-          const compCondition = node.properties.condition || '';
-          const condition_part = compCondition ? ` if ${compCondition}` : '';
-          return `${indent}${compVar} = [${compExpression} for x in ${compIterable}${condition_part}]\n`;
-        case 'set_create':
-          const setName = node.properties.name || 'my_set';
-          const setItems = node.properties.items || 'set()';
-          return `${indent}${setName} = ${setItems}\n`;
-        case 'set_add':
-          const targetSet = node.properties.set || 'my_set';
-          const addItem = node.properties.item || 'item';
-          return `${indent}${targetSet}.add(${addItem})\n`;
-        case 'dict_create':
-          const dictName = node.properties.name || 'my_dict';
-          const dictItems = node.properties.items || '{}';
-          return `${indent}${dictName} = ${dictItems}\n`;
-        case 'dict_get':
-          const getDict = node.properties.dict || 'my_dict';
-          const getKey = node.properties.key || 'key';
-          const getDictVar = node.properties.variable || 'value';
-          return `${indent}${getDictVar} = ${getDict}[${getKey}]\n`;
-        case 'dict_set':
-          const setDict = node.properties.dict || 'my_dict';
-          const setKey = node.properties.key || 'key';
-          const setValue = node.properties.value || 'value';
-          return `${indent}${setDict}[${setKey}] = ${setValue}\n`;
-        case 'increment':
-          const incVar = node.properties.variable || 'counter';
-          return `${indent}${incVar} = ${incVar} + 1\n`;
-        case 'pycode':
-          const pyCode = node.properties.code || '# Custom Python code';
-          return `${indent}${pyCode}\n`;
-        default:
-          return '';
-      }
-    };
-    
-    // Helper function to get child nodes of a parent
-    const getChildNodes = (parentId: string): WorkflowNode[] => {
-      return nodeList
-        .filter(node => node.parentId === parentId)
-        .sort((a, b) => a.position.y - b.position.y);
-    };
-    
-    // Get all top-level nodes (nodes without parents)
-    const topLevelNodes = nodeList
-      .filter(node => !node.parentId)
-      .sort((a, b) => a.position.y - b.position.y);
-    
-    // Generate code for all top-level nodes
-    topLevelNodes.forEach(node => {
-      code += generateNodeCode(node, 0);
-    });
-    
-    return code;
-  }, []);
 
-  const generatePythonCode = useCallback(() => {
-    console.log('generatePythonCode called, nodes count:', nodes.length);
-    console.log('nodes:', nodes);
-    const result = generatePythonCodeFromNodes(nodes);
-    console.log('generatePythonCode result:', result);
-    return result;
-  }, [nodes, generatePythonCodeFromNodes]);
 
-  const executeWorkflow = useCallback(async () => {
-    if (nodes.length === 0) {
-      onConsoleOutput?.(prev => [...prev, 'Error: No nodes to execute']);
-      return;
-    }
 
-    onExecutionState?.(true);
-    onConsoleOutput?.(prev => [...prev, '=== Execution Started ===']);
-    
-    try {
-      // Generate Python code using current nodes
-      const pythonCode = generatePythonCodeFromNodes(nodes);
-      onConsoleOutput?.(prev => [...prev, 'Generated Python Code:', pythonCode]);
-      
-      // Simulate execution for demo purposes
-      setTimeout(() => {
-        // Simple interpreter for demo - just handle variable and print
-        const lines = pythonCode.split('\n').filter(line => line.trim() && !line.startsWith('#'));
-        const variables: Record<string, string> = {};
-        
-        onConsoleOutput?.(prev => [...prev, `Processing ${lines.length} lines of code`]);
-        
-        lines.forEach(line => {
-          const trimmedLine = line.trim();
-          
-          // Handle variable assignment
-          if (trimmedLine.includes(' = ')) {
-            const [varName, value] = trimmedLine.split(' = ');
-            const cleanValue = value.replace(/"/g, '');
-            variables[varName.trim()] = cleanValue;
-            onConsoleOutput?.(prev => [...prev, `Variable assigned: ${varName.trim()} = ${cleanValue}`]);
-          }
-          
-          // Handle print statements
-          if (trimmedLine.startsWith('print(')) {
-            const printContent = trimmedLine.match(/print\((.*)\)/)?.[1];
-            if (printContent) {
-              let output = printContent.replace(/"/g, '');
-              // Replace variable references
-              Object.keys(variables).forEach(varName => {
-                if (output === varName) {
-                  output = variables[varName];
-                }
-              });
-              onConsoleOutput?.(prev => [...prev, `> ${output}`]);
-            }
-          }
-        });
-        
-        onConsoleOutput?.(prev => [...prev, '=== Execution Completed ===']);
-        onExecutionState?.(false);
-      }, 1000);
-      
-    } catch (error) {
-      onConsoleOutput?.(prev => [...prev, `Error: ${error}`]);
-      onExecutionState?.(false);
-    }
-  }, [nodes, generatePythonCodeFromNodes, onConsoleOutput, onExecutionState]);
-
-  const saveWorkflow = useCallback(() => {
-    const currentNodes = nodesRef.current;
-    const currentConnections = connectionsRef.current;
-    
-    const workflowData = {
-      nodes: currentNodes,
-      connections: currentConnections,
-      panels: panels,
-      metadata: {
-        created: new Date().toISOString(),
-        version: '1.0.0',
-        nodeCount: currentNodes.length,
-        panelCount: panels.length
-      }
-    };
-    
-    // Just log the save action instead of downloading
-    onConsoleOutput?.(prev => [...prev, `💾 Workflow saved to memory (${currentNodes.length} nodes, ${currentConnections.length} connections, ${panels.length} panels)`]);
-    
-    // Optional: Store in localStorage for persistence
-    try {
-      localStorage.setItem('agentblocks_workflow', JSON.stringify(workflowData));
-      onConsoleOutput?.(prev => [...prev, `✅ Workflow also saved to browser storage`]);
-    } catch (error) {
-      onConsoleOutput?.(prev => [...prev, `⚠️ Could not save to browser storage: ${error}`]);
-    }
-  }, [onConsoleOutput, panels]); // Stable dependencies only
-
-  const importWorkflow = useCallback((workflowData: any) => {
-    try {
-      if (workflowData.nodes && Array.isArray(workflowData.nodes)) {
-        // Convert imported nodes to ensure they have proper IDs and positions
-        const importedNodes = workflowData.nodes.map((node: any, index: number) => ({
-          id: node.id || `imported-${Date.now()}-${index}`,
-          type: node.type || 'variable',
-          position: node.position || { x: 100 + (index * 30), y: 100 + (index * 150) },
-          properties: node.properties || node.params || {},
-          panelId: 'main-panel'
-        }));
-        
-        setNodes(prev => [...prev, ...importedNodes]);
-        
-        if (workflowData.connections && Array.isArray(workflowData.connections)) {
-          setConnections(prev => [...prev, ...workflowData.connections]);
-        }
-        
-        onConsoleOutput?.(prev => [...prev, `✅ Imported ${importedNodes.length} nodes successfully`]);
-      } else {
-        onConsoleOutput?.(prev => [...prev, `❌ Invalid workflow format - missing nodes array`]);
-      }
-    } catch (error) {
-      onConsoleOutput?.(prev => [...prev, `❌ Error importing workflow: ${error}`]);
-    }
-  }, [onConsoleOutput]);
-
-  // Register callbacks with parent
-  useEffect(() => {
-    if (onRegisterExecute) {
-      onRegisterExecute(executeWorkflow);
-    }
-  }, [executeWorkflow, onRegisterExecute]);
-
-  useEffect(() => {
-    console.log('WorkflowEditor: Registering generatePythonCode callback, onRegisterGenerateCode available:', !!onRegisterGenerateCode);
-    if (onRegisterGenerateCode) {
-      console.log('WorkflowEditor: Calling onRegisterGenerateCode with generatePythonCode function');
-      onRegisterGenerateCode(generatePythonCode);
-    }
-  }, [generatePythonCode, onRegisterGenerateCode]);
-
-  useEffect(() => {
-    if (onRegisterSave) {
-      onRegisterSave(saveWorkflow);
-    }
-  }, [saveWorkflow, onRegisterSave]);
-
-  useEffect(() => {
-    if (onRegisterImportWorkflow) {
-      onRegisterImportWorkflow(importWorkflow);
-    }
-  }, [importWorkflow, onRegisterImportWorkflow]);
-
-  // Panel management functions
-  const handleCreatePanel = useCallback((name: string) => {
-    const newPanel: WorkflowPanel = {
-      id: `panel_${Date.now()}`,
-      name,
-      type: 'module',
-      position: { x: 200 + panels.length * 50, y: 150 + panels.length * 50 },
-      size: { width: 400, height: 300 },
-      color: '#8b5cf6',
-      isExpanded: true
-    };
-    setPanels(prev => [...prev, newPanel]);
-    setSelectedPanel(newPanel);
-    setShowPanelModal(false);
-  }, [panels]);
-
-  const handlePanelSelect = useCallback((panel: WorkflowPanel) => {
-    setSelectedPanel(panel);
-    setSelectedNode(null);
-  }, []);
 
   const handleParentNode = useCallback((nodeId: string) => {
     const node = nodes.find(n => n.id === nodeId);
@@ -744,184 +718,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }));
   }, [nodes]);
 
-  const handleReorderNode = useCallback((draggedNodeId: string, targetNodeId: string, insertBefore: boolean) => {
-    const draggedNode = nodes.find(n => n.id === draggedNodeId);
-    const targetNode = nodes.find(n => n.id === targetNodeId);
-    
-    if (!draggedNode || !targetNode || draggedNode.panelId !== targetNode.panelId) {
-      return; // Only allow reordering within the same panel
-    }
-    
-    setNodes(prev => {
-      // Separate nodes by panel
-      const panelNodes = prev.filter(n => n.panelId === draggedNode.panelId);
-      const otherNodes = prev.filter(n => n.panelId !== draggedNode.panelId);
-      
-      // Sort panel nodes by their current position
-      const sortedPanelNodes = panelNodes.sort((a, b) => a.position.y - b.position.y);
-      
-      // Find indices
-      const draggedIndex = sortedPanelNodes.findIndex(n => n.id === draggedNodeId);
-      const targetIndex = sortedPanelNodes.findIndex(n => n.id === targetNodeId);
-      
-      if (draggedIndex === -1 || targetIndex === -1) return prev;
-      
-      // Create new order by reordering the array
-      const reorderedNodes = [...sortedPanelNodes];
-      const [draggedNodeObj] = reorderedNodes.splice(draggedIndex, 1); // Remove dragged node
-      
-      // Calculate insert position
-      const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
-      const adjustedIndex = insertIndex > draggedIndex ? insertIndex - 1 : insertIndex;
-      
-      // Insert dragged node at new position
-      reorderedNodes.splice(adjustedIndex, 0, draggedNodeObj);
-      
-      // Update positions to match new order - use same spacing as main canvas (52px)
-      const baseY = panels.find(p => p.id === draggedNode.panelId)?.position.y || 100;
-      const updatedPanelNodes = reorderedNodes.map((node, index) => ({
-        ...node,
-        position: {
-          ...node.position,
-          y: baseY + 56 + (index * 52) // Same calculation as main canvas: panel.y + header + (index * spacing)
-        }
-      }));
-      
-      // Combine with other nodes and return
-      return [...otherNodes, ...updatedPanelNodes];
-    });
-  }, [nodes]);
 
-  const handlePanelDrag = useCallback((panelId: string, newPosition: Position) => {
-    const panel = panels.find(p => p.id === panelId);
-    if (panel) {
-      // Snap to grid (20px grid)
-      const gridSize = 20;
-      const snappedPosition = {
-        x: Math.round(newPosition.x / gridSize) * gridSize,
-        y: Math.round(newPosition.y / gridSize) * gridSize
-      };
-      
-      const deltaX = snappedPosition.x - panel.position.x;
-      const deltaY = snappedPosition.y - panel.position.y;
-      
-      // Move panel
-      setPanels(prev => prev.map(p => 
-        p.id === panelId ? { ...p, position: snappedPosition } : p
-      ));
-      
-      // Move all nodes in the panel
-      setNodes(prev => prev.map(node => {
-        if (node.panelId === panelId) {
-          return {
-            ...node,
-            position: {
-              x: node.position.x + deltaX,
-              y: node.position.y + deltaY
-            }
-          };
-        }
-        return node;
-      }));
-    }
-  }, [panels]);
-
-  const handlePanelResize = useCallback((panelId: string, size: { width: number; height: number }) => {
-    setPanels(prev => prev.map(panel => 
-      panel.id === panelId ? { ...panel, size } : panel
-    ));
-  }, []);
-
-  const handleNodeDropInPanel = useCallback((panelId: string, position: Position, blockType: string, insertAfterNodeId?: string) => {
-    handleAddNode(blockType, position, panelId, insertAfterNodeId);
-  }, [handleAddNode]);
   
-  const handleTogglePanelExpanded = useCallback((panelId: string) => {
-    setPanels(prev => prev.map(panel => 
-      panel.id === panelId ? { ...panel, isExpanded: !panel.isExpanded } : panel
-    ));
-  }, []);
   
-  const handleNodeDragInPanel = useCallback((nodeId: string, newPosition: Position) => {
-    setNodes(prev => prev.map(node => {
-      if (node.id === nodeId) {
-        const panel = panels.find(p => p.id === node.panelId);
-        if (panel) {
-          // Convert relative position to absolute
-          return {
-            ...node,
-            position: {
-              x: panel.position.x + newPosition.x,
-              y: panel.position.y + 40 + newPosition.y
-            }
-          };
-        }
-      }
-      return node;
-    }));
-  }, [panels]);
-  
-  const handleNodeReorder = useCallback((panelId: string, nodeId: string, newIndex: number) => {
-    setNodes(prev => {
-      const targetNode = prev.find(node => node.id === nodeId);
-      const targetPanel = panels.find(p => p.id === panelId);
-      
-      if (!targetNode || !targetPanel) return prev;
-      
-      const sourcePanel = panels.find(p => p.id === targetNode.panelId);
-      const isMovingBetweenPanels = targetNode.panelId !== panelId;
-      
-      if (isMovingBetweenPanels) {
-        onConsoleOutput?.(prev => [...prev, `🔄 Moved ${targetNode.type} node from ${sourcePanel?.name || 'unknown'} to ${targetPanel.name}`]);
-      }
-      
-      // Get all nodes except the one being moved
-      const otherNodes = prev.filter(node => node.id !== nodeId);
-      
-      // Get current nodes in target panel, sorted by position
-      const targetPanelNodes = otherNodes.filter(node => node.panelId === panelId)
-        .sort((a, b) => a.position.y - b.position.y);
-      
-      // Insert the moved node at the new index
-      targetPanelNodes.splice(newIndex, 0, {
-        ...targetNode,
-        panelId: panelId, // Update panel assignment
-        parentId: undefined, // Clear parent when moving between panels
-        indentLevel: 0 // Reset indent level when moving between panels
-      });
-      
-      // Update positions for all nodes in the target panel
-      const updatedTargetPanelNodes = targetPanelNodes.map((node, index) => ({
-        ...node,
-        position: {
-          x: targetPanel.position.x + 16 + ((node.indentLevel || 0) * 24),
-          y: targetPanel.position.y + 56 + (index * 52) // header + padding + spacing
-        }
-      }));
-      
-      // Combine with other nodes not in the target panel
-      const nodesNotInTargetPanel = otherNodes.filter(node => node.panelId !== panelId);
-      
-      // If moving between panels, also update positions in source panel
-      if (isMovingBetweenPanels && sourcePanel) {
-        const sourcePanelNodes = nodesNotInTargetPanel.filter(node => node.panelId === sourcePanel.id)
-          .sort((a, b) => a.position.y - b.position.y)
-          .map((node, index) => ({
-            ...node,
-            position: {
-              x: sourcePanel.position.x + 16 + ((node.indentLevel || 0) * 24),
-              y: sourcePanel.position.y + 56 + (index * 52)
-            }
-          }));
-        
-        // Replace source panel nodes with repositioned ones
-        const nodesNotInEitherPanel = nodesNotInTargetPanel.filter(node => node.panelId !== sourcePanel.id);
-        return [...nodesNotInEitherPanel, ...sourcePanelNodes, ...updatedTargetPanelNodes];
-      }
-      
-      return [...nodesNotInTargetPanel, ...updatedTargetPanelNodes];
-    });
-  }, [panels, onConsoleOutput]);
   
   const handleDeleteSelectedNode = useCallback(() => {
     if (selectedNode) {
@@ -948,16 +747,16 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   
   // Handle canvas recenter
   const handleRecenterCanvas = useCallback(() => {
-    if (panels.length === 0) return;
+    if (nodes.length === 0) return;
 
-    // Calculate bounds of all panels
+    // Calculate bounds of all nodes
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     
-    panels.forEach(panel => {
-      minX = Math.min(minX, panel.position.x);
-      minY = Math.min(minY, panel.position.y);
-      maxX = Math.max(maxX, panel.position.x + panel.size.width);
-      maxY = Math.max(maxY, panel.position.y + panel.size.height);
+    nodes.forEach(node => {
+      minX = Math.min(minX, node.position.x);
+      minY = Math.min(minY, node.position.y);
+      maxX = Math.max(maxX, node.position.x + 200); // Assume node width ~200px
+      maxY = Math.max(maxY, node.position.y + 100); // Assume node height ~100px
     });
 
     // Add some padding
@@ -981,7 +780,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       y: viewportHeight / 2 - centerY
     });
 
-    // Optionally adjust zoom to fit all panels
+    // Optionally adjust zoom to fit all nodes
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
     const zoomX = viewportWidth / contentWidth;
@@ -991,7 +790,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     if (newZoom > 0.2) {
       setCanvasZoom(newZoom);
     }
-  }, [panels]);
+  }, [nodes]);
 
   // Handle keyboard events
   useEffect(() => {
@@ -1078,8 +877,12 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       if (workflowData.nodes && Array.isArray(workflowData.nodes)) {
         setNodes(workflowData.nodes);
         setConnections(workflowData.connections || []);
-        setPanels(workflowData.panels || []);
-        onConsoleOutput?.(prev => [...prev, `Workflow loaded (${workflowData.nodes.length} nodes, ${(workflowData.panels || []).length} panels)`]);
+        // Set active function from loaded data or find first function
+        const mainFunction = workflowData.nodes.find((n: WorkflowNode) => n.type === 'function' && n.properties?.function_name === 'main');
+        const firstFunction = workflowData.nodes.find((n: WorkflowNode) => n.type === 'function');
+        setActiveFunctionId(mainFunction?.id || firstFunction?.id || 'main-function');
+        const functionCount = workflowData.nodes.filter((n: WorkflowNode) => n.type === 'function').length;
+        onConsoleOutput?.(prev => [...prev, `Workflow loaded (${workflowData.nodes.length} nodes, ${functionCount} functions)`]);
       }
     } catch (error) {
       onConsoleOutput?.(prev => [...prev, `Error loading workflow: ${error}`]);
@@ -1282,13 +1085,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [selectedNode, showCanvasPropertyPanel]);
 
-  // Register callbacks with parent (stable callbacks)
-  useEffect(() => {
-    onRegisterExecute?.(executeWorkflow);
-    onRegisterGenerateCode?.(generatePythonCode);
-    onRegisterSave?.(saveWorkflow);
-    onRegisterImportWorkflow?.(handleImportWorkflow);
-  }, [executeWorkflow, generatePythonCode, saveWorkflow, handleImportWorkflow, onRegisterExecute, onRegisterGenerateCode, onRegisterSave, onRegisterImportWorkflow]);
 
   const getDefaultInputs = (type: string) => {
     switch (type) {
@@ -1309,6 +1105,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           { id: 'headers', name: 'Headers', type: 'object' },
           { id: 'data', name: 'Data', type: 'string' }
         ];
+      case 'function_call':
+        return [{ id: 'arguments', name: 'Arguments', type: 'string' }];
       default:
         return [{ id: 'input', name: 'Input', type: 'any' }];
     }
@@ -1333,21 +1131,226 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           { id: 'status', name: 'Status', type: 'number' },
           { id: 'headers', name: 'Headers', type: 'object' }
         ];
+      case 'function_call':
+        return [{ id: 'result', name: 'Result', type: 'any' }];
       default:
         return [{ id: 'output', name: 'Output', type: 'any' }];
     }
   };
 
+  // Available node types for autocomplete
+  const nodeTypes = [
+    { type: 'variable', name: 'Variable' },
+    { type: 'print', name: 'Print' },
+    { type: 'if-then', name: 'If/Then' },
+    { type: 'foreach', name: 'For Each' },
+    { type: 'while', name: 'While Loop' },
+    { type: 'function', name: 'Function' },
+    { type: 'find_files', name: 'Find Files' },
+    { type: 'read_file', name: 'Read File' },
+    { type: 'write_file', name: 'Write File' },
+    { type: 'copy_file', name: 'Copy File' },
+    { type: 'text_transform', name: 'Transform Text' },
+    { type: 'regex_match', name: 'Regex Match' },
+    { type: 'http_request', name: 'HTTP Request' },
+    { type: 'download_file', name: 'Download' },
+    { type: 'ai_text_gen', name: 'AI Text Generation' },
+    { type: 'ai_code_gen', name: 'AI Code Generation' },
+    { type: 'python_code', name: 'Python Code' },
+    { type: 'shell_command', name: 'Shell Command' }
+  ];
+
+  // Filter node types based on search term
+  const filteredNodeTypes = nodeTypes.filter(nodeType =>
+    nodeType.name.toLowerCase().includes(insertSearchTerm.toLowerCase()) ||
+    nodeType.type.toLowerCase().includes(insertSearchTerm.toLowerCase())
+  );
+
+  // Handle search term changes and reset selection
+  const handleInsertSearchChange = useCallback((value: string) => {
+    setInsertSearchTerm(value);
+    setSelectedInsertIndex(0);
+  }, []);
+
+  // Handle keyboard navigation in insert popup
+  const handleInsertKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (filteredNodeTypes.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedInsertIndex(prev => Math.min(prev + 1, filteredNodeTypes.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedInsertIndex(prev => Math.max(prev - 1, 0));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (filteredNodeTypes[selectedInsertIndex]) {
+          handleInsertNode(filteredNodeTypes[selectedInsertIndex].type);
+        }
+        break;
+      case 'Escape':
+        setShowInsertPopup(false);
+        setInsertSearchTerm('');
+        setSelectedInsertIndex(0);
+        break;
+    }
+  }, [filteredNodeTypes, selectedInsertIndex, handleInsertNode]);
+
   return (
     <div className="editor-workspace">
-      {/* Block Palette */}
-      <NodePalette onAddNode={handleAddNode} />
+      {/* Block Palette - shown only when F2 is pressed */}
+      {showNodePalette && <NodePalette onAddNode={handleAddNode} autoFocus={true} />}
+
+      {/* Insert Node Popup - shown when 'i' is pressed */}
+      {showInsertPopup && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: '#1e293b',
+            border: '1px solid #374151',
+            borderRadius: '8px',
+            padding: '20px',
+            minWidth: '400px',
+            maxHeight: '500px',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <h3 style={{ color: '#f1f5f9', margin: '0 0 16px 0' }}>
+              Insert Node {selectedNode ? `after ${selectedNode.type}` : ''}
+            </h3>
+            
+            <input
+              type="text"
+              value={insertSearchTerm}
+              onChange={(e) => handleInsertSearchChange(e.target.value)}
+              onKeyDown={handleInsertKeyDown}
+              placeholder="Type node name..."
+              autoFocus
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#374151',
+                border: '1px solid #4b5563',
+                borderRadius: '4px',
+                color: '#f1f5f9',
+                marginBottom: '12px',
+                outline: 'none'
+              }}
+            />
+            
+            <div style={{
+              maxHeight: '300px',
+              overflowY: 'auto',
+              border: '1px solid #374151',
+              borderRadius: '4px'
+            }}>
+              {filteredNodeTypes.length > 0 ? (
+                filteredNodeTypes.slice(0, 10).map((nodeType, index) => (
+                  <div
+                    key={nodeType.type}
+                    onClick={() => handleInsertNode(nodeType.type)}
+                    onMouseEnter={() => setSelectedInsertIndex(index)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      backgroundColor: index === selectedInsertIndex ? '#374151' : 'transparent',
+                      color: '#f1f5f9',
+                      borderBottom: index < filteredNodeTypes.length - 1 ? '1px solid #374151' : 'none'
+                    }}
+                  >
+                    <strong>{nodeType.name}</strong>
+                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>{nodeType.type}</div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>
+                  No matching nodes found
+                </div>
+              )}
+            </div>
+            
+            <div style={{ marginTop: '12px', fontSize: '12px', color: '#9ca3af' }}>
+              Use ↑↓ arrows to navigate, Enter to insert, Escape to cancel
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Canvas Container */}
       <div className="canvas-container">
         {/* Toolbar */}
         <div className="canvas-toolbar">
           <div className="toolbar-left">
+            {/* Command/Search Field */}
+            <input
+              ref={commandFieldRef}
+              type="text"
+              value={commandFieldValue}
+              onChange={(e) => {
+                setCommandFieldValue(e.target.value);
+                // Perform search as user types
+                if (e.target.value.trim()) {
+                  performSearch(e.target.value);
+                } else {
+                  setSearchResults([]);
+                  setCurrentSearchIndex(0);
+                }
+              }}
+              onFocus={() => setIsCommandFieldFocused(true)}
+              onBlur={() => setIsCommandFieldFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchResults.length > 0) {
+                  findNext();
+                } else if (e.key === 'Escape') {
+                  setCommandFieldValue('');
+                  setSearchResults([]);
+                  setIsCommandFieldFocused(false);
+                  commandFieldRef.current?.blur();
+                }
+              }}
+              placeholder="Search nodes... (/ or Ctrl+F)"
+              style={{
+                padding: '4px 8px',
+                marginRight: '8px',
+                backgroundColor: '#374151',
+                border: '1px solid #4b5563',
+                borderRadius: '4px',
+                color: '#f1f5f9',
+                fontSize: '12px',
+                width: '200px',
+                outline: 'none'
+              }}
+            />
+            
+            {/* Search Results Indicator */}
+            {searchResults.length > 0 && (
+              <span style={{
+                marginRight: '8px',
+                padding: '2px 6px',
+                backgroundColor: '#065f46',
+                border: '1px solid #059669',
+                borderRadius: '3px',
+                color: '#10b981',
+                fontSize: '11px'
+              }}>
+                {currentSearchIndex + 1}/{searchResults.length}
+              </span>
+            )}
+            
             <button 
               className="toolbar-button"
               onClick={handleRefreshCanvas}
@@ -1388,12 +1391,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           </div>
           
           <div className="toolbar-right">
-            <button 
-              className="toolbar-button primary"
-              onClick={() => setShowPanelModal(true)}
-            >
-              + Add Module
-            </button>
+            <span className="toolbar-info">
+              Active Function: {nodes.find(n => n.id === activeFunctionId)?.properties?.function_name || 'main'}
+            </span>
           </div>
         </div>
 
@@ -1416,36 +1416,24 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         >
           <div className="grid-background" />
           
-          {/* Panels */}
-          {panels.map(panel => (
-            <PanelComponent
-              key={panel.id}
-              panel={panel}
-              nodes={nodes}
-              selected={selectedPanel?.id === panel.id}
-              onSelect={handlePanelSelect}
-              onDrag={handlePanelDrag}
-              onResize={handlePanelResize}
-              onNodeDrop={handleNodeDropInPanel}
-              onToggleExpanded={handleTogglePanelExpanded}
-              onNodeDrag={handleNodeDragInPanel}
-              onNodeReorder={handleNodeReorder}
-              selectedNode={selectedNode}
-              onNodeSelect={handleNodeSelect}
-              onStartConnection={handleStartConnection}
-              onCompleteConnection={handleCompleteConnection}
-              connecting={connecting}
-              connections={connections}
-            />
-          ))}
-
-          {/* Nodes - only render nodes that are not in any panel */}
-          {nodes
-            .filter(node => !node.panelId) // Only orphaned nodes (not in panels)
-            .map(node => (
+          {/* Function Nodes and their children */}
+          {nodes.map(node => {
+            // Render function nodes with visual emphasis for active function
+            const isActiveFunction = node.type === 'function' && node.id === activeFunctionId;
+            const isFunctionNode = node.type === 'function';
+            
+            return (
               <NodeComponent
                 key={node.id}
-                node={node}
+                node={{
+                  ...node,
+                  // Add visual styling for active function
+                  data: {
+                    ...node.data,
+                    isActiveFunction,
+                    isFunctionNode
+                  }
+                }}
                 selected={selectedNode?.id === node.id}
                 onSelect={handleNodeSelect}
                 onDrag={handleNodeDrag}
@@ -1453,9 +1441,10 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                 onCompleteConnection={handleCompleteConnection}
                 connecting={connecting}
                 connections={connections}
-                onReorderNode={handleReorderNode}
+                allNodes={nodes}
               />
-            ))}
+            );
+          })}
 
           {/* Auto-generated connections between vertically stacked nodes */}
           <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
@@ -1599,23 +1588,23 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             >
               <rect width="1600" height="1200" fill="#111827" />
               
-              {/* Panel rectangles */}
-              {panels.map(panel => (
+              {/* Function node rectangles */}
+              {nodes.filter(node => node.type === 'function').map(node => (
                 <rect
-                  key={`minimap-panel-${panel.id}`}
-                  x={panel.position.x / 8}
-                  y={panel.position.y / 8}
-                  width={panel.size.width / 8}
-                  height={panel.size.height / 8}
-                  fill={panel.color || '#3b82f6'}
+                  key={`minimap-function-${node.id}`}
+                  x={node.position.x / 8}
+                  y={node.position.y / 8}
+                  width={240 / 8} // Assume function node width ~240px
+                  height={120 / 8} // Assume function node height ~120px
+                  fill={node.id === activeFunctionId ? '#10b981' : '#3b82f6'}
                   stroke="#ffffff"
                   strokeWidth="0.5"
                   opacity="0.6"
                 />
               ))}
               
-              {/* Node dots */}
-              {nodes.filter(node => !node.panelId).map(node => (
+              {/* Other node dots */}
+              {nodes.filter(node => node.type !== 'function').map(node => (
                 <circle
                   key={`minimap-${node.id}`}
                   cx={node.position.x / 8 + 5}
@@ -1643,38 +1632,32 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       </div>
       </div>
 
-      {/* Panel Modal */}
-      <PanelModal
-        isOpen={showPanelModal}
-        onCreatePanel={handleCreatePanel}
-        onClose={() => setShowPanelModal(false)}
-      />
 
       {/* Canvas Property Panel (conditionally rendered) */}
       {showCanvasPropertyPanel && selectedNode && (() => {
-        // Find the panel that contains the selected node
-        const nodePanel = panels.find(p => p.id === selectedNode.panelId);
-        if (!nodePanel) return null;
+        // Show properties for the selected node's function
+        const parentFunction = nodes.find(n => n.id === selectedNode.parentId && n.type === 'function');
+        if (!parentFunction && selectedNode.type !== 'function') return null;
         
-        // Calculate position to avoid overlapping with main panel
-        // First try to position to the right of the node's panel
-        let panelPosition = {
-          x: nodePanel.position.x + nodePanel.size.width + 120, // +100px as requested
-          y: nodePanel.position.y
+        // Calculate position to avoid overlapping with selected node
+        // Position to the right of the selected node
+        const panelPosition = {
+          x: selectedNode.position.x + 220, // Node width ~200px + 20px margin
+          y: selectedNode.position.y
         };
         
-        // Check if this would overlap with any other panels
+        // Check if this would go off screen
         const propertyPanelWidth = 280; // Width of canvas property panel (matches CSS)
         const canvasWidth = 1200; // Approximate canvas width
         
-        // If positioning to the right would go off screen or overlap, try left side
+        // If positioning to the right would go off screen, try left side
         if (panelPosition.x + propertyPanelWidth > canvasWidth) {
-          panelPosition.x = nodePanel.position.x - propertyPanelWidth - 120;
+          panelPosition.x = selectedNode.position.x - propertyPanelWidth - 20;
           
-          // If left side would also go off screen, position it above/below
+          // If left side would also go off screen, position it below
           if (panelPosition.x < 0) {
-            panelPosition.x = nodePanel.position.x;
-            panelPosition.y = nodePanel.position.y + nodePanel.size.height + 20;
+            panelPosition.x = selectedNode.position.x;
+            panelPosition.y = selectedNode.position.y + 120; // Node height ~100px + 20px margin
           }
         }
         
@@ -1697,19 +1680,189 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         <PropertiesPanel 
           ref={propertiesPanelRef}
           selectedNode={selectedNode}
-          selectedPanel={selectedPanel}
           nodes={nodes}
-          panels={panels}
+          activeFunctionId={activeFunctionId}
           onUpdateNode={(node) => {
             setNodes(prev => prev.map(n => n.id === node.id ? node : n));
             setSelectedNode(node);
           }}
           onNodeSelect={handleNodeSelect}
-          onPanelSelect={handlePanelSelect}
         />
       )}
     </div>
   );
+
+  // Generate Python code
+  const generatePythonCode = useCallback(() => {
+    onConsoleOutput?.(prev => [...prev, '🐍 Generating Python code...']);
+    onConsoleOutput?.(prev => [...prev, `📊 Processing ${nodes.length} nodes and ${connections.length} connections`]);
+    
+    const functionNodes = nodes.filter(n => n.type === 'function');
+    const regularNodes = nodes.filter(n => n.type !== 'function');
+    
+    onConsoleOutput?.(prev => [...prev, `🔧 Found ${functionNodes.length} functions: ${functionNodes.map(n => n.properties?.function_name || 'unnamed').join(', ')}`]);
+    onConsoleOutput?.(prev => [...prev, `📦 Found ${regularNodes.length} regular nodes: ${regularNodes.map(n => n.type).join(', ')}`]);
+    
+    const generator = new PythonNodeGenerator();
+    const result = generator.generateWorkflowCode(nodes, connections);
+    
+    onConsoleOutput?.(prev => [...prev, `✅ Generated Python code (${result.length} characters, ${result.split('\n').length} lines)`]);
+    
+    // Show first few lines of code
+    const codePreview = result.split('\n').slice(0, 3).join('\n');
+    onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
+    
+    return result;
+  }, [nodes, connections, onConsoleOutput]);
+
+  // Generate Rust code
+  const generateRustCode = useCallback(() => {
+    onConsoleOutput?.(prev => [...prev, '🦀 Generating Rust code...']);
+    onConsoleOutput?.(prev => [...prev, `📊 Processing ${nodes.length} nodes and ${connections.length} connections`]);
+    
+    const functionNodes = nodes.filter(n => n.type === 'function');
+    const regularNodes = nodes.filter(n => n.type !== 'function');
+    
+    onConsoleOutput?.(prev => [...prev, `🔧 Found ${functionNodes.length} functions: ${functionNodes.map(n => n.properties?.function_name || 'unnamed').join(', ')}`]);
+    onConsoleOutput?.(prev => [...prev, `📦 Found ${regularNodes.length} regular nodes: ${regularNodes.map(n => n.type).join(', ')}`]);
+    
+    const generator = new RustNodeGenerator();
+    const result = generator.generateWorkflowCode(nodes, connections);
+    
+    onConsoleOutput?.(prev => [...prev, `✅ Generated Rust code (${result.length} characters, ${result.split('\n').length} lines)`]);
+    
+    // Show first few lines of code
+    const codePreview = result.split('\n').slice(0, 3).join('\n');
+    onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
+    
+    return result;
+  }, [nodes, connections, onConsoleOutput]);
+
+  // Save workflow
+  const saveWorkflow = useCallback(() => {
+    const workflowData = {
+      nodes,
+      connections,
+      activeFunctionId,
+      version: '1.0',
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem('agentblocks_workflow', JSON.stringify(workflowData));
+    const functionCount = nodes.filter(n => n.type === 'function').length;
+    onConsoleOutput?.(prev => [...prev, `💾 Workflow saved with ${nodes.length} nodes and ${functionCount} functions`]);
+  }, [nodes, connections, activeFunctionId, onConsoleOutput]);
+
+  // Export workflow
+  const exportWorkflow = useCallback(() => {
+    const exporter = new WorkflowExporter();
+    const functionCount = nodes.filter(n => n.type === 'function').length;
+    const workflow = {
+      id: `workflow_${Date.now()}`,
+      name: 'Generated Workflow',
+      description: 'Exported from AgentBlocks',
+      version: '1.0.0',
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
+      nodes,
+      connections,
+      panels: [], // No panels in new system
+      metadata: {
+        nodeCount: nodes.length,
+        connectionCount: connections.length,
+        functionCount: functionCount,
+        activeFunctionId
+      }
+    };
+    
+    // Export as JSON by default
+    const jsonContent = exporter.exportWorkflow(workflow, 'json');
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = exporter.getExportFilename(workflow, 'json');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    onConsoleOutput?.(prev => [...prev, `📤 Workflow exported as JSON`]);
+  }, [nodes, connections, activeFunctionId, onConsoleOutput]);
+
+  // Execute workflow
+  const executeWorkflow = useCallback(() => {
+    console.log('Executing workflow with nodes:', nodes.length);
+    onConsoleOutput?.(prev => [...prev, '⚡ Starting workflow execution...']);
+    
+    // Get the active function or default to main
+    const activeFunction = nodes.find(n => n.id === activeFunctionId && n.type === 'function');
+    if (!activeFunction) {
+      onConsoleOutput?.(prev => [...prev, '❌ No active function found to execute']);
+      return;
+    }
+    
+    // Get all nodes that belong to the active function
+    const functionNodes = nodes.filter(n => n.parentId === activeFunctionId || n.id === activeFunctionId);
+    
+    onConsoleOutput?.(prev => [...prev, `🔧 Executing function: ${activeFunction.properties?.function_name || 'main'}`]);
+    onConsoleOutput?.(prev => [...prev, `📊 Function contains ${functionNodes.length} nodes`]);
+    
+    // Generate Python code for the active function
+    const pythonCode = generatePythonCode();
+    onConsoleOutput?.(prev => [...prev, `🐍 Generated Python code (${pythonCode.length} characters)`]);
+    
+    // Show first few lines of generated code
+    const codeLines = pythonCode.split('\n').slice(0, 5);
+    codeLines.forEach(line => {
+      if (line.trim()) {
+        onConsoleOutput?.(prev => [...prev, `    ${line}`]);
+      }
+    });
+    
+    if (pythonCode.split('\n').length > 5) {
+      onConsoleOutput?.(prev => [...prev, `    ... (${pythonCode.split('\n').length - 5} more lines)`]);
+    }
+    
+    onConsoleOutput?.(prev => [...prev, '✅ Workflow execution completed']);
+  }, [nodes, connections, activeFunctionId, generatePythonCode, onConsoleOutput]);
+
+  // Register callbacks
+  useEffect(() => {
+    if (onRegisterExecute) {
+      onRegisterExecute(executeWorkflow);
+    }
+  }, [onRegisterExecute, executeWorkflow]);
+
+  useEffect(() => {
+    if (onRegisterGeneratePythonCode) {
+      onRegisterGeneratePythonCode(generatePythonCode);
+    }
+  }, [onRegisterGeneratePythonCode, generatePythonCode]);
+
+  useEffect(() => {
+    if (onRegisterGenerateRustCode) {
+      onRegisterGenerateRustCode(generateRustCode);
+    }
+  }, [onRegisterGenerateRustCode, generateRustCode]);
+
+  useEffect(() => {
+    if (onRegisterSave) {
+      onRegisterSave(saveWorkflow);
+    }
+  }, [onRegisterSave, saveWorkflow]);
+
+  useEffect(() => {
+    if (onRegisterImportWorkflow) {
+      onRegisterImportWorkflow(handleImportWorkflow);
+    }
+  }, [onRegisterImportWorkflow, handleImportWorkflow]);
+
+  useEffect(() => {
+    if (onRegisterExport) {
+      onRegisterExport(exportWorkflow);
+    }
+  }, [onRegisterExport, exportWorkflow]);
 };
 
 export default WorkflowEditor;

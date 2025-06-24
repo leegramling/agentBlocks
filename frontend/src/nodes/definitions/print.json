@@ -1,0 +1,53 @@
+{
+  "type": "print",
+  "name": "Print",
+  "category": "output",
+  "version": "1.0",
+  "description": "Display text or variable values to the console",
+  "icon": "🖨️",
+  "color": "#10b981",
+  "properties": {
+    "message": {
+      "type": "string",
+      "label": "Message",
+      "description": "Text to print or variable name to display",
+      "default": "Hello World",
+      "required": true,
+      "placeholder": "Enter message or variable name"
+    },
+    "format": {
+      "type": "select",
+      "label": "Output Format",
+      "description": "How to format the output",
+      "default": "plain",
+      "options": [
+        { "value": "plain", "label": "Plain Text" },
+        { "value": "json", "label": "JSON Format" },
+        { "value": "pretty", "label": "Pretty Print" }
+      ]
+    },
+    "newline": {
+      "type": "boolean",
+      "label": "Add Newline",
+      "description": "Add a newline character after the message",
+      "default": true
+    }
+  },
+  "inputs": [
+    {
+      "name": "message",
+      "type": "any",
+      "label": "Message Input",
+      "description": "Dynamic message content from another node",
+      "optional": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "printed",
+      "type": "string",
+      "label": "Printed Text",
+      "description": "The text that was printed to console"
+    }
+  ]
+}

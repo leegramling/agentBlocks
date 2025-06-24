@@ -1,25 +1,43 @@
 import React, { useState } from 'react';
 import { X, Save } from 'lucide-react';
 
+type CodeLanguage = 'python' | 'rust';
+
 interface CodeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  code: string;
+  pythonCode: string;
+  rustCode: string;
   title?: string;
 }
 
 const CodeModal: React.FC<CodeModalProps> = ({ 
   isOpen, 
   onClose, 
-  code, 
-  title = "Generated Python Code" 
+  pythonCode, 
+  rustCode, 
+  title = "Generated Code" 
 }) => {
+  const [language, setLanguage] = useState<CodeLanguage>('python');
   const [filename, setFilename] = useState('generated_workflow.py');
   
   if (!isOpen) return null;
 
+  const handleLanguageChange = (newLanguage: CodeLanguage) => {
+    setLanguage(newLanguage);
+    const extension = newLanguage === 'python' ? '.py' : '.rs';
+    const baseName = filename.replace(/\.[^/.]+$/, '');
+    setFilename(baseName + extension);
+  };
+
+  const getCurrentCode = () => {
+    return language === 'python' ? pythonCode : rustCode;
+  };
+
   const handleSaveCode = () => {
-    const blob = new Blob([code], { type: 'text/python' });
+    const code = getCurrentCode();
+    const mimeType = language === 'python' ? 'text/python' : 'text/rust';
+    const blob = new Blob([code], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -36,6 +54,23 @@ const CodeModal: React.FC<CodeModalProps> = ({
         {/* Modal Header */}
         <div className="code-modal-header">
           <h3 className="code-modal-title">{title}</h3>
+          
+          {/* Language Selection */}
+          <div className="language-selector">
+            <button
+              className={`lang-button ${language === 'python' ? 'active' : ''}`}
+              onClick={() => handleLanguageChange('python')}
+            >
+              🐍 Python
+            </button>
+            <button
+              className={`lang-button ${language === 'rust' ? 'active' : ''}`}
+              onClick={() => handleLanguageChange('rust')}
+            >
+              🦀 Rust
+            </button>
+          </div>
+
           <div className="filename-input-container">
             <input
               type="text"
@@ -68,7 +103,7 @@ const CodeModal: React.FC<CodeModalProps> = ({
         {/* Code Display */}
         <div className="code-modal-content">
           <pre className="code-display">
-            <code>{code || '# No code generated yet'}</code>
+            <code>{getCurrentCode() || (language === 'python' ? '# No Python code generated yet' : '// No Rust code generated yet')}</code>
           </pre>
         </div>
       </div>

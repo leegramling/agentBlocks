@@ -1,0 +1,103 @@
+{
+  "type": "regex",
+  "name": "Regex Match",
+  "category": "text",
+  "version": "1.0",
+  "description": "Pattern matching and text extraction with regular expressions",
+  "icon": "🔍",
+  "color": "#8b5cf6",
+  "properties": {
+    "pattern": {
+      "type": "string",
+      "label": "Regex Pattern",
+      "description": "Regular expression pattern to match",
+      "default": "\\d+",
+      "required": true,
+      "placeholder": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+    },
+    "flags": {
+      "type": "string",
+      "label": "Regex Flags",
+      "description": "Regex flags (i=ignore case, g=global, m=multiline, s=dotall)",
+      "default": "",
+      "placeholder": "gi"
+    },
+    "operation": {
+      "type": "select",
+      "label": "Operation",
+      "description": "Type of regex operation to perform",
+      "default": "match",
+      "options": [
+        { "value": "match", "label": "Match - Test if pattern matches" },
+        { "value": "findall", "label": "Find All - Extract all matches" },
+        { "value": "search", "label": "Search - Find first match" },
+        { "value": "replace", "label": "Replace - Replace matches" },
+        { "value": "split", "label": "Split - Split on pattern" }
+      ]
+    },
+    "replacement": {
+      "type": "string",
+      "label": "Replacement Text",
+      "description": "Text to replace matches with (supports $1, $2 for groups)",
+      "default": "",
+      "placeholder": "Replacement: $1",
+      "conditional": {
+        "field": "operation",
+        "value": "replace"
+      }
+    },
+    "case_insensitive": {
+      "type": "boolean",
+      "label": "Case Insensitive",
+      "description": "Ignore case when matching",
+      "default": false
+    },
+    "multiline": {
+      "type": "boolean",
+      "label": "Multiline Mode",
+      "description": "^ and $ match line boundaries",
+      "default": false
+    },
+    "dotall": {
+      "type": "boolean",
+      "label": "Dot Matches All",
+      "description": ". matches newline characters",
+      "default": false
+    }
+  },
+  "inputs": [
+    {
+      "name": "text",
+      "type": "string",
+      "label": "Input Text",
+      "description": "Text to apply regex pattern to",
+      "optional": false
+    }
+  ],
+  "outputs": [
+    {
+      "name": "matches",
+      "type": "array",
+      "label": "Matches",
+      "description": "Array of matched strings or groups"
+    },
+    {
+      "name": "match_count",
+      "type": "number",
+      "label": "Match Count",
+      "description": "Number of matches found"
+    },
+    {
+      "name": "result",
+      "type": "string",
+      "label": "Result",
+      "description": "Result text (for replace/split operations)"
+    },
+    {
+      "name": "success",
+      "type": "boolean",
+      "label": "Success",
+      "description": "Whether operation completed successfully"
+    }
+  ]
+}
