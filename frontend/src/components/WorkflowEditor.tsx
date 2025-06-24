@@ -1715,9 +1715,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             className="key-mappings-help"
             style={{
               position: 'absolute',
-              bottom: '100px',
-              left: '20px',
-              backgroundColor: 'rgba(17, 24, 39, 0.95)',
+              top: '20px',
+              right: '20px',
+              backgroundColor: 'rgba(17, 24, 39, 0.7)',
               border: '1px solid #374151',
               borderRadius: '8px',
               padding: '16px',
@@ -1726,7 +1726,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
               minWidth: '300px',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              zIndex: 10
+              zIndex: 0
             }}
           >
             <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#f1f5f9' }}>
