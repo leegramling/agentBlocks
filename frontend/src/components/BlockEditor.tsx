@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import type { Block, Position } from '../types';
+import type { Block, Position, WorkflowNode, Connection } from '../types';
 import BlockComponent from './BlockComponent';
 import { ArrowLeft, Play, Save, Code, Settings, Globe, Terminal, FileText, Search } from 'lucide-react';
+import { PythonNodeGenerator } from '../nodes/generators/PythonNodeGenerator';
 
 const BlockEditor: React.FC = () => {
-  const { nodeId } = useParams<{ nodeId: string }>();
+  const { nodeId: _nodeId } = useParams<{ nodeId: string }>();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [showCodePreview, setShowCodePreview] = useState(false);
@@ -100,160 +101,116 @@ const BlockEditor: React.FC = () => {
     e.preventDefault();
   };
 
-  const getExecutionOrder = (blocks: Block[]): Block[] => {
-    // Simple execution order based on connections and position
-    // For now, use position-based ordering as fallback until connections are implemented
-    return blocks.sort((a, b) => {
-      if (Math.abs(a.position.y - b.position.y) < 50) {
-        // If blocks are roughly on the same line, sort by x position
-        return a.position.x - b.position.x;
-      }
-      // Otherwise sort by y position (top to bottom)
-      return a.position.y - b.position.y;
-    });
+
+  // Convert blocks to WorkflowNode format for use with generators
+  const convertBlocksToNodes = (): WorkflowNode[] => {
+    return blocks.map(block => ({
+      id: block.id,
+      type: mapBlockTypeToNodeType(block.type),
+      position: block.position,
+      properties: convertBlockPropertiesToNodeProperties(block),
+      inputs: [],
+      outputs: [],
+      parentId: block.parentId,
+      children: block.children,
+      indentLevel: block.indentLevel
+    }));
+  };
+
+  // Map block types to node types that generators understand
+  const mapBlockTypeToNodeType = (blockType: string): string => {
+    const typeMap: Record<string, string> = {
+      'variable_set': 'variable',
+      'variable_get': 'variable',
+      'text_input': 'variable',
+      'text_join': 'variable',
+      'text_split': 'variable',
+      'regex_match': 'grep',
+      'regex_replace': 'grep',
+      'curl_get': 'curl',
+      'curl_post': 'curl',
+      'file_read': 'read_file',
+      'file_write': 'write_file',
+      'bash_command': 'bash',
+      'if_condition': 'if-then',
+      'loop_for': 'foreach',
+      'loop_while': 'while',
+      'math_add': 'variable',
+      'math_subtract': 'variable',
+      'array_create': 'variable',
+      'array_get': 'variable',
+      'array_append': 'variable'
+    };
+    return typeMap[blockType] || 'variable';
+  };
+
+  // Convert block properties to node properties format
+  const convertBlockPropertiesToNodeProperties = (block: Block): Record<string, unknown> => {
+    const props = block.properties;
+    const blockType = block.type;
+    
+    switch (blockType) {
+      case 'variable_set':
+        return { name: props.variableName || 'var', value: props.value || '' };
+      case 'variable_get':
+        return { name: props.variableName || 'var', value: props.variableName || 'var' };
+      case 'text_input':
+        return { name: `text_${block.id}`, value: props.text || '' };
+      case 'text_join':
+        return { name: `joined_${block.id}`, value: `"${props.separator || ' '}".join([${props.parts?.join(', ') || '""'}])` };
+      case 'text_split':
+        return { name: `split_${block.id}`, value: `(${props.text || '""'}).split("${props.separator || ' '}")` };
+      case 'regex_match':
+        return { pattern: props.pattern || '', input_source: 'input', case_insensitive: props.ignoreCase || false };
+      case 'regex_replace':
+        return { pattern: props.pattern || '', replacement: props.replacement || '', input_source: 'input' };
+      case 'curl_get':
+        return { url: props.url || '', method: 'GET', timeout: props.timeout || 30 };
+      case 'curl_post':
+        return { url: props.url || '', method: 'POST', body: JSON.stringify(props.data || {}), timeout: props.timeout || 30 };
+      case 'file_read':
+        return { file_path: props.filepath || '', encoding: props.encoding || 'utf-8' };
+      case 'file_write':
+        return { file_path: props.filepath || '', content: props.content || '', mode: props.mode || 'write', encoding: props.encoding || 'utf-8' };
+      case 'bash_command':
+        return { command: props.command || '', timeout: props.timeout || 30 };
+      case 'if_condition':
+        return { condition: props.condition || 'True' };
+      case 'loop_for':
+        return { iterable: props.iterable || 'range(10)', item_variable: props.variable || 'item' };
+      case 'loop_while':
+        return { condition: props.condition || 'False', max_iterations: props.maxIterations || 100 };
+      case 'math_add':
+        return { name: `math_${block.id}`, value: `(${props.a || 0}) + (${props.b || 0})` };
+      case 'math_subtract':
+        return { name: `math_${block.id}`, value: `(${props.a || 0}) - (${props.b || 0})` };
+      case 'array_create':
+        return { name: `array_${block.id}`, value: `[${props.items?.map((item: unknown) => JSON.stringify(item)).join(', ') || ''}]` };
+      case 'array_get':
+        return { name: `item_${block.id}`, value: `(${props.array || '[]'})[${props.index || 0}]` };
+      case 'array_append':
+        return { name: `array_${block.id}`, value: `list(${props.array || '[]'}) + [${JSON.stringify(props.item || '')}]` };
+      default:
+        return props;
+    }
   };
 
   const generateCode = () => {
-    const imports = new Set<string>();
-    let code = '';
-    
-    // Add standard imports
-    imports.add('import re');
-    imports.add('import os');
-    imports.add('import json');
-    imports.add('import subprocess');
-    imports.add('import requests');
-    imports.add('from typing import Dict, List, Any, Optional');
-
-    // Handle empty blocks
     if (blocks.length === 0) {
-      code = '# No blocks in editor\nprint("Empty block editor - add some blocks to generate code")\n';
-    } else {
-      // Use parent-child hierarchy instead of position-based sorting
-      const topLevelBlocks = blocks.filter(block => !block.parentId);
-      const executionOrder = getExecutionOrder(topLevelBlocks);
-
-      // Generate code for each block in execution order
-      for (const block of executionOrder) {
-        const blockCode = generateBlockCode(block, imports);
-        if (blockCode.trim()) {
-          code += blockCode + '\n';
-        }
-      }
+      return '# No blocks in editor\nprint("Empty block editor - add some blocks to generate code")\n';
     }
 
-    // Combine imports and code
-    const importsCode = Array.from(imports).sort().join('\n');
-    return `${importsCode}\n\n# Generated block code\n\n${code}`;
+    // Convert blocks to WorkflowNode format
+    const workflowNodes = convertBlocksToNodes();
+    const connections: Connection[] = []; // Blocks don't have explicit connections yet
+
+    // Use PythonNodeGenerator to generate code
+    const pythonGenerator = new PythonNodeGenerator();
+    const generatedCode = pythonGenerator.generateWorkflowCode(workflowNodes, connections);
+    
+    return generatedCode;
   };
 
-  const generateBlockCode = (block: Block, imports: Set<string>): string => {
-    const props = block.properties;
-    const blockVar = `${block.type}_${block.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
-    
-    // Helper function to generate child block code
-    const generateChildBlocks = (parentBlock: Block, indentLevel: number = 1): string => {
-      const childBlocks = blocks.filter(b => b.parentId === parentBlock.id);
-      const childExecutionOrder = getExecutionOrder(childBlocks);
-      let childCode = '';
-      
-      for (const childBlock of childExecutionOrder) {
-        const childBlockCode = generateBlockCode(childBlock, imports);
-        if (childBlockCode.trim()) {
-          // Indent child code
-          const indentedCode = childBlockCode.split('\n').map(line => 
-            line.trim() ? '    '.repeat(indentLevel) + line : line
-          ).join('\n');
-          childCode += indentedCode + '\n';
-        }
-      }
-      
-      return childCode || '    '.repeat(indentLevel) + '# No child blocks\n    '.repeat(indentLevel) + 'pass\n';
-    };
-    
-    switch (block.type) {
-      case 'variable_set':
-        return `# Set variable\n${props.variableName || 'var'} = ${JSON.stringify(props.value || '')}\n`;
-        
-      case 'variable_get':
-        return `# Get variable\n${blockVar}_result = ${props.variableName || 'var'}\n`;
-        
-      case 'text_input':
-        return `# Text input\n${blockVar}_text = ${JSON.stringify(props.text || '')}\n`;
-        
-      case 'text_join':
-        imports.add('from typing import Union');
-        return `# Join text\n${blockVar}_parts = [str(x) for x in [${props.parts?.join(', ') || '""'}]]\n${blockVar}_result = "${props.separator || ' '}".join(${blockVar}_parts)\n`;
-        
-      case 'text_split':
-        return `# Split text\n${blockVar}_result = (${props.text || '""'}).split("${props.separator || ' '}")\n`;
-        
-      case 'regex_match': {
-        imports.add('import re');
-        const flags = [];
-        if (props.ignoreCase) flags.push('re.IGNORECASE');
-        if (props.multiline) flags.push('re.MULTILINE');
-        const flagsStr = flags.length > 0 ? ` | ${flags.join(' | ')}` : '';
-        return `# Regex match\n${blockVar}_pattern = re.compile(r"${props.pattern || ''}"${flagsStr})\n${blockVar}_result = ${blockVar}_pattern.findall(${props.text || '""'})\n`;
-      }
-        
-      case 'regex_replace':
-        imports.add('import re');
-        return `# Regex replace\n${blockVar}_result = re.sub(r"${props.pattern || ''}", "${props.replacement || ''}", ${props.text || '""'})\n`;
-        
-      case 'curl_get':
-        imports.add('import requests');
-        return `# HTTP GET request\ntry:\n    ${blockVar}_response = requests.get("${props.url || ''}", timeout=${props.timeout || 30})\n    ${blockVar}_result = ${blockVar}_response.text\nexcept Exception as e:\n    ${blockVar}_result = f"Error: {str(e)}"\n`;
-        
-      case 'curl_post':
-        imports.add('import requests');
-        imports.add('import json');
-        return `# HTTP POST request\ntry:\n    ${blockVar}_data = ${JSON.stringify(props.data || {})}\n    ${blockVar}_response = requests.post("${props.url || ''}", json=${blockVar}_data, timeout=${props.timeout || 30})\n    ${blockVar}_result = ${blockVar}_response.text\nexcept Exception as e:\n    ${blockVar}_result = f"Error: {str(e)}"\n`;
-        
-      case 'file_read':
-        return `# Read file\ntry:\n    with open("${props.filepath || ''}", "r", encoding="${props.encoding || 'utf-8'}") as f:\n        ${blockVar}_result = f.read()\nexcept Exception as e:\n    ${blockVar}_result = f"Error reading file: {str(e)}"\n`;
-        
-      case 'file_write':
-        return `# Write file\ntry:\n    with open("${props.filepath || ''}", "${props.mode || 'w'}", encoding="${props.encoding || 'utf-8'}") as f:\n        f.write(${props.content || '""'})\n    ${blockVar}_result = "File written successfully"\nexcept Exception as e:\n    ${blockVar}_result = f"Error writing file: {str(e)}"\n`;
-        
-      case 'bash_command':
-        imports.add('import subprocess');
-        return `# Execute bash command\ntry:\n    ${blockVar}_result = subprocess.run("${props.command || ''}", shell=True, capture_output=True, text=True, timeout=${props.timeout || 30})\n    ${blockVar}_output = ${blockVar}_result.stdout\n    ${blockVar}_error = ${blockVar}_result.stderr\nexcept Exception as e:\n    ${blockVar}_output = f"Error: {str(e)}"\n`;
-        
-      case 'if_condition': {
-        const ifChildCode = generateChildBlocks(block);
-        return `# Conditional logic\nif ${props.condition || 'True'}:\n${ifChildCode}    ${blockVar}_result = "Condition was true"\nelse:\n    ${blockVar}_result = "Condition was false"\n`;
-      }
-        
-      case 'loop_for': {
-        const forChildCode = generateChildBlocks(block);
-        return `# For loop\n${blockVar}_results = []\nfor ${props.variable || 'item'} in ${props.iterable || 'range(10)'}:\n${forChildCode}    ${blockVar}_results.append(${props.variable || 'item'})\n${blockVar}_result = ${blockVar}_results\n`;
-      }
-        
-      case 'loop_while': {
-        const whileChildCode = generateChildBlocks(block);
-        return `# While loop\n${blockVar}_count = 0\n${blockVar}_results = []\nwhile ${props.condition || 'False'} and ${blockVar}_count < ${props.maxIterations || 100}:\n${whileChildCode}    ${blockVar}_results.append(${blockVar}_count)\n    ${blockVar}_count += 1\n${blockVar}_result = ${blockVar}_results\n`;
-      }
-        
-      case 'math_add':
-        return `# Math addition\n${blockVar}_result = (${props.a || 0}) + (${props.b || 0})\n`;
-        
-      case 'math_subtract':
-        return `# Math subtraction\n${blockVar}_result = (${props.a || 0}) - (${props.b || 0})\n`;
-        
-      case 'array_create':
-        return `# Create array\n${blockVar}_result = [${props.items?.map((item: unknown) => JSON.stringify(item)).join(', ') || ''}]\n`;
-        
-      case 'array_get':
-        return `# Get array item\ntry:\n    ${blockVar}_result = (${props.array || '[]'})[${props.index || 0}]\nexcept (IndexError, TypeError) as e:\n    ${blockVar}_result = f"Error accessing array: {str(e)}"\n`;
-        
-      case 'array_append':
-        return `# Append to array\n${blockVar}_array = list(${props.array || '[]'})\n${blockVar}_array.append(${JSON.stringify(props.item || '')})\n${blockVar}_result = ${blockVar}_array\n`;
-        
-      default:
-        return `# Unsupported block type: ${block.type}\n# Block ID: ${block.id}\n# Properties: ${JSON.stringify(props, null, 2).split('\n').map(line => `# ${line}`).join('\n')}\n`;
-    }
-  };
 
   return (
     <div className="layout">
