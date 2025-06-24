@@ -139,5 +139,18 @@
       "label": "Success",
       "description": "Whether the grep operation completed successfully"
     }
-  ]
+  ],
+  "codeGeneration": {
+    "python": {
+      "imports": ["import re", "import glob"],
+      "template": "# Grep node: {{nodeId}}\n{{nodeVar}}_config = {\n    'pattern': {{quote pattern}},\n    'input_source': {{quote input_source}},\n    'file_path': {{quote file_path}},\n    'case_insensitive': {{case_insensitive}},\n    'whole_words': {{whole_words}},\n    'invert_match': {{invert_match}},\n    'line_numbers': {{line_numbers}},\n    'count_only': {{count_only}},\n    'max_count': {{max_count}} if {{max_count}} > 0 else None,\n    'context_before': {{context_before}},\n    'context_after': {{context_after}},\n    'recursive': {{recursive}},\n    'file_pattern': {{quote file_pattern}}\n}\n\n{{nodeVar}}_result = execute_grep_{{sanitizedNodeId}}({{nodeVar}}_config, {{inputVar}})\n{{nodeVar}}_matches = {{nodeVar}}_result['matches']\n{{nodeVar}}_match_count = {{nodeVar}}_result['match_count']\n{{nodeVar}}_success = {{nodeVar}}_result['success']\n",
+      "functions": ["grep_helpers"]
+    },
+    "rust": {
+      "imports": ["use regex::Regex;", "use walkdir::WalkDir;"],
+      "structs": ["GrepMatch", "GrepResult"],
+      "template": "// Grep node: {{nodeId}}\nlet {{nodeVar}}_pattern = {{rustString pattern}};\nlet {{nodeVar}}_case_insensitive = {{case_insensitive}};\nlet {{nodeVar}}_whole_words = {{whole_words}};\nlet {{nodeVar}}_invert_match = {{invert_match}};\nlet {{nodeVar}}_line_numbers = {{line_numbers}};\nlet {{nodeVar}}_count_only = {{count_only}};\nlet {{nodeVar}}_max_count = {{rustOptional max_count usize}};\nlet {{nodeVar}}_context_before = {{context_before}}usize;\nlet {{nodeVar}}_context_after = {{context_after}}usize;\nlet {{nodeVar}}_input_source = {{rustString input_source}};\nlet {{nodeVar}}_file_path = {{rustString file_path}};\nlet {{nodeVar}}_recursive = {{recursive}};\nlet {{nodeVar}}_file_pattern = {{rustString file_pattern}};\n\nlet {{nodeVar}}_result = execute_grep_operations(&{{nodeVar}}_pattern, {{inputVar}});\nlet {{nodeVar}}_matches = {{nodeVar}}_result.matches;\nlet {{nodeVar}}_match_count = {{nodeVar}}_result.match_count;\nlet {{nodeVar}}_success = {{nodeVar}}_result.success;\n",
+      "functions": ["grep_helpers"]
+    }
+  }
 }

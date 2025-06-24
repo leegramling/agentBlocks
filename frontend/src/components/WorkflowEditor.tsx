@@ -5,7 +5,7 @@ import ConnectionLine from './ConnectionLine';
 import NodePalette from './NodePalette';
 import PropertiesPanel, { type PropertiesPanelRef } from './PropertiesPanel';
 import CanvasPropertyPanel from './CanvasPropertyPanel';
-import { toPythonFString, hasVariableReferences } from '../utils/variableSubstitution';
+// import { toPythonFString, hasVariableReferences } from '../utils/variableSubstitution';
 import { PythonNodeGenerator } from '../nodes/generators/PythonNodeGenerator';
 import { RustNodeGenerator } from '../nodes/generators/RustNodeGenerator';
 import { WorkflowExporter } from '../nodes/WorkflowExporter';
@@ -21,6 +21,14 @@ interface WorkflowEditorProps {
   onRegisterSave?: (callback: () => void) => void;
   onRegisterImportWorkflow?: (callback: (workflowData: any) => void) => void;
   onRegisterExport?: (callback: () => void) => void;
+  onRegisterPerformSearch?: (callback: (term: string) => void) => void;
+  onRegisterFindNext?: (callback: () => void) => void;
+  onRegisterFindPrevious?: (callback: () => void) => void;
+  onSetSearchResults?: (results: WorkflowNode[]) => void;
+  onSetCurrentSearchIndex?: (index: number) => void;
+  toggleHelpModalCallback?: React.MutableRefObject<(() => void) | null>;
+  focusSearchFieldCallback?: React.MutableRefObject<(() => void) | null>;
+  isSearchFieldFocused?: boolean;
 }
 
 const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
@@ -33,7 +41,15 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   onRegisterGenerateRustCode,
   onRegisterSave,
   onRegisterImportWorkflow,
-  onRegisterExport
+  onRegisterExport,
+  onRegisterPerformSearch,
+  onRegisterFindNext,
+  onRegisterFindPrevious,
+  onSetSearchResults,
+  onSetCurrentSearchIndex,
+  toggleHelpModalCallback,
+  focusSearchFieldCallback,
+  isSearchFieldFocused = false
 }) => {
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -48,6 +64,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(true);
+  const [showKeyMappings, setKeyMappings] = useState(true);
   const [showCanvasPropertyPanel, setShowCanvasPropertyPanel] = useState(false);
   const [showNodePalette, setShowNodePalette] = useState(false);
   const [showInsertPopup, setShowInsertPopup] = useState(false);
@@ -56,11 +73,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const [searchResults, setSearchResults] = useState<WorkflowNode[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
   const [commandFieldValue, setCommandFieldValue] = useState('');
-  const [isCommandFieldFocused, setIsCommandFieldFocused] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const propertiesPanelRef = useRef<PropertiesPanelRef>(null);
-  const commandFieldRef = useRef<HTMLInputElement>(null);
   
   // Refs to capture current state for callbacks
   const nodesRef = useRef<WorkflowNode[]>([]);
@@ -109,6 +124,63 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       onConsoleOutput?.(prev => [...prev, '🎯 Created default main function']);
     }
   }, [nodes.length, onConsoleOutput]);
+
+  // Ensure main function always exists and orphaned nodes belong to it
+  useEffect(() => {
+    if (nodes.length > 0) {
+      const mainFunction = nodes.find(node => 
+        node.type === 'function' && node.properties?.function_name === 'main'
+      );
+      
+      if (!mainFunction) {
+        // Create main function
+        const newMainFunction: WorkflowNode = {
+          id: 'main-function',
+          type: 'function',
+          position: { x: 100, y: 100 },
+          panelId: undefined,
+          properties: {
+            function_name: 'main',
+            parameters: '',
+            return_type: 'void',
+            description: 'Main function - entry point of the workflow'
+          },
+          inputs: [],
+          outputs: [{ id: 'output', name: 'Output', type: 'any' }],
+        };
+        
+        // Move orphaned nodes (nodes without parentId or with invalid parentId) to main function
+        const updatedNodes = nodes.map(node => {
+          if (node.type !== 'function' && (!node.parentId || !nodes.find(n => n.id === node.parentId))) {
+            return { ...node, parentId: 'main-function' };
+          }
+          return node;
+        });
+        
+        setNodes([newMainFunction, ...updatedNodes]);
+        setActiveFunctionId('main-function');
+        onConsoleOutput?.(prev => [...prev, '🎯 Added missing main function and organized nodes']);
+      } else {
+        // Main function exists, but check for orphaned nodes
+        const orphanedNodes = nodes.filter(node => 
+          node.type !== 'function' && 
+          (!node.parentId || !nodes.find(n => n.id === node.parentId && n.type === 'function'))
+        );
+        
+        if (orphanedNodes.length > 0) {
+          const updatedNodes = nodes.map(node => {
+            if (orphanedNodes.includes(node)) {
+              return { ...node, parentId: mainFunction.id };
+            }
+            return node;
+          });
+          
+          setNodes(updatedNodes);
+          onConsoleOutput?.(prev => [...prev, `🔧 Moved ${orphanedNodes.length} orphaned nodes to main function`]);
+        }
+      }
+    }
+  }, [nodes, onConsoleOutput]);
   
   // Update refs when state changes
   useEffect(() => {
@@ -157,6 +229,34 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     
     
     onConsoleOutput?.(prev => [...prev, '🔄 Canvas refreshed - all nodes redrawn']);
+  }, [onConsoleOutput]);
+
+  // Reset workflow to default with main function
+  const resetWorkflow = useCallback(() => {
+    // Clear localStorage
+    localStorage.removeItem('agentblocks_workflow');
+    
+    // Create default main function
+    const mainFunction: WorkflowNode = {
+      id: 'main-function',
+      type: 'function',
+      position: { x: 100, y: 100 },
+      panelId: undefined,
+      properties: {
+        function_name: 'main',
+        parameters: '',
+        return_type: 'void',
+        description: 'Main function - entry point of the workflow'
+      },
+      inputs: [],
+      outputs: [{ id: 'output', name: 'Output', type: 'any' }],
+    };
+    
+    setNodes([mainFunction]);
+    setConnections([]);
+    setSelectedNode(null);
+    setActiveFunctionId('main-function');
+    onConsoleOutput?.(prev => [...prev, '🔄 Workflow reset with main function']);
   }, [onConsoleOutput]);
 
   const handleNodeDrag = useCallback((nodeId: string, position: Position) => {
@@ -291,10 +391,37 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       }
     }
     
-    // If we added a function node, make it the active function
+    // Handle function node creation
     if (type === 'function') {
-      setActiveFunctionId(newNodeId);
-      onConsoleOutput?.(prev => [...prev, `🔧 Created new function chain: ${newNode.properties?.function_name || 'unnamed'}`]);
+      if (parentId) {
+        // Function dropped inside another function - create a function instance/call
+        const parentFunction = nodes.find(n => n.id === parentId);
+        const functionName = newNode.properties?.function_name || 'myFunction';
+        const existingFunction = nodes.find(n => n.type === 'function' && n.properties?.function_name === functionName && !n.parentId);
+        
+        if (existingFunction) {
+          // This is an instance of an existing function
+          newNode.properties = {
+            ...newNode.properties,
+            function_name: functionName,
+            instance_of: existingFunction.id,
+            call_type: 'instance'
+          };
+          onConsoleOutput?.(prev => [...prev, `📞 Created function instance "${functionName}" in ${parentFunction?.properties?.function_name || 'function'}`]);
+        } else {
+          // This is a new function definition inside another function (local function)
+          newNode.properties = {
+            ...newNode.properties,
+            function_name: functionName,
+            call_type: 'local_definition'
+          };
+          onConsoleOutput?.(prev => [...prev, `📦 Created local function "${functionName}" in ${parentFunction?.properties?.function_name || 'function'}`]);
+        }
+      } else {
+        // Function dropped on canvas - create a new function chain
+        setActiveFunctionId(newNodeId);
+        onConsoleOutput?.(prev => [...prev, `🔧 Created new function chain: ${newNode.properties?.function_name || 'unnamed'}`]);
+      }
     } else {
       const activeFunction = nodes.find(n => n.id === parentId);
       onConsoleOutput?.(prev => [...prev, `➕ Added ${type} node to function ${activeFunction?.properties?.function_name || 'unknown'}`]);
@@ -318,6 +445,23 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         };
         console.log('📊 Main function structure:', JSON.stringify(debugInfo, null, 2));
         onConsoleOutput?.(prev => [...prev, `📊 Main has ${mainChildren.length} children: ${mainChildren.map(c => c.type).join(', ')}`]);
+        onConsoleOutput?.(prev => [...prev, `🔍 Main function JSON structure logged to browser console`]);
+        
+        // Also show the JSON structure in the console output (truncated for readability)
+        const jsonString = JSON.stringify(debugInfo, null, 2);
+        const jsonLines = jsonString.split('\n');
+        if (jsonLines.length > 10) {
+          onConsoleOutput?.(prev => [...prev, `📋 JSON structure (first 10 lines):`]);
+          jsonLines.slice(0, 10).forEach(line => {
+            onConsoleOutput?.(prev => [...prev, `    ${line}`]);
+          });
+          onConsoleOutput?.(prev => [...prev, `    ... (${jsonLines.length - 10} more lines in console)`]);
+        } else {
+          onConsoleOutput?.(prev => [...prev, `📋 Complete JSON structure:`]);
+          jsonLines.forEach(line => {
+            onConsoleOutput?.(prev => [...prev, `    ${line}`]);
+          });
+        }
       }
     }
     
@@ -456,6 +600,47 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [nodes, selectedNode, handleNodeSelect]);
 
+  // Function navigation
+  const selectPreviousFunction = useCallback(() => {
+    const functionNodes = nodes.filter(n => n.type === 'function');
+    if (functionNodes.length === 0) return;
+    
+    const currentFunctionIndex = functionNodes.findIndex(n => n.id === activeFunctionId);
+    let previousIndex;
+    
+    if (currentFunctionIndex <= 0) {
+      // Wrap to last function
+      previousIndex = functionNodes.length - 1;
+    } else {
+      previousIndex = currentFunctionIndex - 1;
+    }
+    
+    const previousFunction = functionNodes[previousIndex];
+    setActiveFunctionId(previousFunction.id);
+    handleNodeSelect(previousFunction);
+    onConsoleOutput?.(prev => [...prev, `🔧 Switched to function: ${previousFunction.properties?.function_name || 'unnamed'}`]);
+  }, [nodes, activeFunctionId, handleNodeSelect, onConsoleOutput]);
+
+  const selectNextFunction = useCallback(() => {
+    const functionNodes = nodes.filter(n => n.type === 'function');
+    if (functionNodes.length === 0) return;
+    
+    const currentFunctionIndex = functionNodes.findIndex(n => n.id === activeFunctionId);
+    let nextIndex;
+    
+    if (currentFunctionIndex >= functionNodes.length - 1) {
+      // Wrap to first function
+      nextIndex = 0;
+    } else {
+      nextIndex = currentFunctionIndex + 1;
+    }
+    
+    const nextFunction = functionNodes[nextIndex];
+    setActiveFunctionId(nextFunction.id);
+    handleNodeSelect(nextFunction);
+    onConsoleOutput?.(prev => [...prev, `🔧 Switched to function: ${nextFunction.properties?.function_name || 'unnamed'}`]);
+  }, [nodes, activeFunctionId, handleNodeSelect, onConsoleOutput]);
+
   // Search functionality
   const performSearch = useCallback((term: string) => {
     if (!term.trim()) {
@@ -511,12 +696,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   // Keyboard handler for F2, 'i', navigation keys (moved after function definitions)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle most shortcuts if command field is focused (except specific ones)
-      if (isCommandFieldFocused) {
-        if (e.key === 'Escape') {
-          commandFieldRef.current?.blur();
-          setIsCommandFieldFocused(false);
-        }
+      // Don't handle most shortcuts if search field is focused (except specific ones)
+      if (isSearchFieldFocused) {
+        // Let the Layout component handle search field interactions
         return;
       }
 
@@ -535,10 +717,16 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       }
 
       // Handle global keyboard shortcuts
-      if (e.key === 'F2') {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setKeyMappings(true);
+        if (toggleHelpModalCallback?.current) {
+          toggleHelpModalCallback.current();
+        }
+      } else if (e.key === 'F2') {
         e.preventDefault();
         setShowNodePalette(prev => !prev);
-      } else if (e.key === 'i' && !isCommandFieldFocused) {
+      } else if (e.key === 'i' && !isSearchFieldFocused) {
         e.preventDefault();
         setShowInsertPopup(true);
         setInsertSearchTerm('');
@@ -548,29 +736,39 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         setShowNodePalette(false);
         setInsertSearchTerm('');
         setSelectedInsertIndex(0);
-      } else if ((e.key === 'ArrowUp' || e.key === 'k') && !isCommandFieldFocused) {
+      } else if ((e.key === 'ArrowUp' || e.key === 'k') && !isSearchFieldFocused) {
         e.preventDefault();
         selectPreviousNode();
-      } else if ((e.key === 'ArrowDown' || e.key === 'j') && !isCommandFieldFocused) {
+      } else if ((e.key === 'ArrowDown' || e.key === 'j') && !isSearchFieldFocused) {
         e.preventDefault();
         selectNextNode();
+      } else if ((e.key === 'ArrowLeft' || e.key === 'h') && !isSearchFieldFocused) {
+        e.preventDefault();
+        selectPreviousFunction();
+      } else if ((e.key === 'ArrowRight' || e.key === 'l') && !isSearchFieldFocused) {
+        e.preventDefault();
+        selectNextFunction();
       } else if (e.key === '/' || (e.ctrlKey && e.key === 'f')) {
         e.preventDefault();
-        // Focus the command field instead of opening popup
-        commandFieldRef.current?.focus();
-        setIsCommandFieldFocused(true);
+        // Focus the search field in Layout
+        if (focusSearchFieldCallback?.current) {
+          focusSearchFieldCallback.current();
+        }
       } else if (e.key === 'n' && searchResults.length > 0) {
         e.preventDefault();
         findNext();
       } else if (e.key === 'N' && searchResults.length > 0) {
         e.preventDefault();
         findPrevious();
+      } else if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        resetWorkflow();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showInsertPopup, showNodePalette, selectPreviousNode, selectNextNode, searchResults.length, findNext, findPrevious, isCommandFieldFocused]);
+  }, [showInsertPopup, showNodePalette, selectPreviousNode, selectNextNode, selectPreviousFunction, selectNextFunction, searchResults.length, findNext, findPrevious, isSearchFieldFocused, resetWorkflow]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -600,9 +798,9 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const getDefaultProperties = (type: string): Record<string, any> => {
     switch (type) {
       case 'variable':
-        return { name: 'counter', value: '0' };
+        return { name: 'counter', value: '1' };
       case 'print':
-        return { message: 'f"{counter}. {fruit}"' };
+        return { message: '{counter}. {fruit}' };
       case 'assignment':
         return { variable: 'result', expression: 'value' };
       case 'if-then':
@@ -1295,62 +1493,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         {/* Toolbar */}
         <div className="canvas-toolbar">
           <div className="toolbar-left">
-            {/* Command/Search Field */}
-            <input
-              ref={commandFieldRef}
-              type="text"
-              value={commandFieldValue}
-              onChange={(e) => {
-                setCommandFieldValue(e.target.value);
-                // Perform search as user types
-                if (e.target.value.trim()) {
-                  performSearch(e.target.value);
-                } else {
-                  setSearchResults([]);
-                  setCurrentSearchIndex(0);
-                }
-              }}
-              onFocus={() => setIsCommandFieldFocused(true)}
-              onBlur={() => setIsCommandFieldFocused(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchResults.length > 0) {
-                  findNext();
-                } else if (e.key === 'Escape') {
-                  setCommandFieldValue('');
-                  setSearchResults([]);
-                  setIsCommandFieldFocused(false);
-                  commandFieldRef.current?.blur();
-                }
-              }}
-              placeholder="Search nodes... (/ or Ctrl+F)"
-              style={{
-                padding: '4px 8px',
-                marginRight: '8px',
-                backgroundColor: '#374151',
-                border: '1px solid #4b5563',
-                borderRadius: '4px',
-                color: '#f1f5f9',
-                fontSize: '12px',
-                width: '200px',
-                outline: 'none'
-              }}
-            />
-            
-            {/* Search Results Indicator */}
-            {searchResults.length > 0 && (
-              <span style={{
-                marginRight: '8px',
-                padding: '2px 6px',
-                backgroundColor: '#065f46',
-                border: '1px solid #059669',
-                borderRadius: '3px',
-                color: '#10b981',
-                fontSize: '11px'
-              }}>
-                {currentSearchIndex + 1}/{searchResults.length}
-              </span>
-            )}
-            
             <button 
               className="toolbar-button"
               onClick={handleRefreshCanvas}
@@ -1570,6 +1712,94 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           <div className="canvas-info-subtitle">Drag nodes to connect</div>
         </div>
 
+        {/* Key Mappings Help */}
+        {showKeyMappings && (
+          <div 
+            className="key-mappings-help"
+            style={{
+              position: 'absolute',
+              bottom: '100px',
+              left: '20px',
+              backgroundColor: 'rgba(17, 24, 39, 0.95)',
+              border: '1px solid #374151',
+              borderRadius: '8px',
+              padding: '16px',
+              color: '#d1d5db',
+              fontSize: '12px',
+              fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              minWidth: '300px',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              zIndex: 10
+            }}
+          >
+            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#f1f5f9' }}>
+              🎹 Key Mappings
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '4px', fontSize: '11px' }}>
+              <div style={{ fontWeight: '600' }}>Navigation:</div>
+              <div></div>
+              
+              <div>↑ / k</div>
+              <div>Select previous node</div>
+              
+              <div>↓ / j</div>
+              <div>Select next node</div>
+              
+              <div>h / ←</div>
+              <div>Previous function</div>
+              
+              <div>l / →</div>
+              <div>Next function</div>
+              
+              <div style={{ fontWeight: '600', paddingTop: '8px' }}>Actions:</div>
+              <div></div>
+              
+              <div>i</div>
+              <div>Insert node after selection</div>
+              
+              <div>/ or Ctrl+F</div>
+              <div>Search nodes</div>
+              
+              <div>n</div>
+              <div>Find next in search</div>
+              
+              <div>N</div>
+              <div>Find previous in search</div>
+              
+              <div style={{ fontWeight: '600', paddingTop: '8px' }}>Panels:</div>
+              <div></div>
+              
+              <div>F1</div>
+              <div>Toggle this help</div>
+              
+              <div>F2</div>
+              <div>Toggle node palette</div>
+              
+              <div>f</div>
+              <div>Toggle properties panel</div>
+              
+              <div>p</div>
+              <div>Toggle canvas properties</div>
+              
+              <div style={{ fontWeight: '600', paddingTop: '8px' }}>Canvas:</div>
+              <div></div>
+              
+              <div>Space</div>
+              <div>Recenter canvas</div>
+              
+              <div>Mouse Wheel</div>
+              <div>Zoom in/out</div>
+              
+              <div>Ctrl+Click</div>
+              <div>Pan canvas</div>
+              
+              <div>Escape</div>
+              <div>Close popups</div>
+            </div>
+          </div>
+        )}
+
         {/* Minimap */}
         <div className="minimap">
           <div className="minimap-header">Minimap (Zoom: {Math.round(canvasZoom * 100)}%)</div>
@@ -1681,6 +1911,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           ref={propertiesPanelRef}
           selectedNode={selectedNode}
           nodes={nodes}
+          connections={connections}
           activeFunctionId={activeFunctionId}
           onUpdateNode={(node) => {
             setNodes(prev => prev.map(n => n.id === node.id ? node : n));
@@ -1863,6 +2094,38 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       onRegisterExport(exportWorkflow);
     }
   }, [onRegisterExport, exportWorkflow]);
+
+  // Register search callbacks
+  useEffect(() => {
+    if (onRegisterPerformSearch) {
+      onRegisterPerformSearch(performSearch);
+    }
+  }, [onRegisterPerformSearch, performSearch]);
+
+  useEffect(() => {
+    if (onRegisterFindNext) {
+      onRegisterFindNext(findNext);
+    }
+  }, [onRegisterFindNext, findNext]);
+
+  useEffect(() => {
+    if (onRegisterFindPrevious) {
+      onRegisterFindPrevious(findPrevious);
+    }
+  }, [onRegisterFindPrevious, findPrevious]);
+
+  // Register search results and index updates
+  useEffect(() => {
+    if (onSetSearchResults) {
+      onSetSearchResults(searchResults);
+    }
+  }, [onSetSearchResults, searchResults]);
+
+  useEffect(() => {
+    if (onSetCurrentSearchIndex) {
+      onSetCurrentSearchIndex(currentSearchIndex);
+    }
+  }, [onSetCurrentSearchIndex, currentSearchIndex]);
 };
 
 export default WorkflowEditor;

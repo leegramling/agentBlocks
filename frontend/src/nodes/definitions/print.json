@@ -49,5 +49,18 @@
       "label": "Printed Text",
       "description": "The text that was printed to console"
     }
-  ]
+  ],
+  "codeGeneration": {
+    "python": {
+      "imports": [],
+      "template": "# Print node: {{nodeId}}\nprint({{formatMessage}})\n",
+      "functions": []
+    },
+    "rust": {
+      "imports": [],
+      "structs": [],
+      "template": "// Print node: {{nodeId}}\nprintln!(\"{}\", {{formatMessage}});\n",
+      "functions": []
+    }
+  }
 }

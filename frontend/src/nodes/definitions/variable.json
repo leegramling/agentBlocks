@@ -45,5 +45,18 @@
       "label": "Value",
       "description": "The stored variable value"
     }
-  ]
+  ],
+  "codeGeneration": {
+    "python": {
+      "imports": [],
+      "template": "# Variable node: {{nodeId}}\n{{varName}} = {{formatValue}}\n",
+      "functions": []
+    },
+    "rust": {
+      "imports": [],
+      "structs": [],
+      "template": "// Variable node: {{nodeId}}\nlet {{varName}} = {{formatValue}};\n",
+      "functions": []
+    }
+  }
 }

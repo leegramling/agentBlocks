@@ -10,6 +10,12 @@ function App() {
   const [nodeCount, setNodeCount] = useState(0);
   const [nodes, setNodes] = useState<any[]>([]);
   
+  // Search state
+  const [searchValue, setSearchValue] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const [isSearchFieldFocused, setIsSearchFieldFocused] = useState(false);
+  
   // These will be passed to and managed by WorkflowEditor - using refs for stable function references
   const executeCallbackRef = useRef<(() => void) | null>(null);
   const generatePythonCodeCallbackRef = useRef<(() => string) | null>(null);
@@ -17,6 +23,15 @@ function App() {
   const saveCallbackRef = useRef<(() => void) | null>(null);
   const importWorkflowCallbackRef = useRef<((workflowData: any) => void) | null>(null);
   const exportCallbackRef = useRef<(() => void) | null>(null);
+  
+  // Search callbacks that will be implemented by WorkflowEditor
+  const performSearchCallbackRef = useRef<((term: string) => void) | null>(null);
+  const findNextCallbackRef = useRef<(() => void) | null>(null);
+  const findPreviousCallbackRef = useRef<(() => void) | null>(null);
+
+  // UI callbacks that will be implemented by Layout
+  const toggleHelpModalCallbackRef = useRef<(() => void) | null>(null);
+  const focusSearchFieldCallbackRef = useRef<(() => void) | null>(null);
 
   const setExecuteCallback = useCallback((callback: (() => void) | null) => {
     executeCallbackRef.current = callback;
@@ -102,6 +117,75 @@ function App() {
     setNodes(newNodes);
   }, []);
 
+  // Search handlers
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchValue(value);
+    if (performSearchCallbackRef.current) {
+      performSearchCallbackRef.current(value);
+    }
+  }, []);
+
+  const handleSearchFocus = useCallback(() => {
+    setIsSearchFieldFocused(true);
+  }, []);
+
+  const handleSearchBlur = useCallback(() => {
+    setIsSearchFieldFocused(false);
+  }, []);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && searchResults.length > 0) {
+      e.preventDefault();
+      if (findNextCallbackRef.current) {
+        findNextCallbackRef.current();
+      }
+    } else if (e.key === 'Escape') {
+      setSearchValue('');
+      setSearchResults([]);
+      setIsSearchFieldFocused(false);
+      if (performSearchCallbackRef.current) {
+        performSearchCallbackRef.current('');
+      }
+    }
+  }, [searchResults.length]);
+
+  const handleFindNext = useCallback(() => {
+    if (findNextCallbackRef.current) {
+      findNextCallbackRef.current();
+    }
+  }, []);
+
+  // Search callback setters
+  const setPerformSearchCallback = useCallback((callback: ((term: string) => void) | null) => {
+    performSearchCallbackRef.current = callback;
+  }, []);
+
+  const setFindNextCallback = useCallback((callback: (() => void) | null) => {
+    findNextCallbackRef.current = callback;
+  }, []);
+
+  const setFindPreviousCallback = useCallback((callback: (() => void) | null) => {
+    findPreviousCallbackRef.current = callback;
+  }, []);
+
+  // UI callback setters
+  const setToggleHelpModalCallback = useCallback((callback: (() => void) | null) => {
+    toggleHelpModalCallbackRef.current = callback;
+  }, []);
+
+  const setFocusSearchFieldCallback = useCallback((callback: (() => void) | null) => {
+    focusSearchFieldCallbackRef.current = callback;
+  }, []);
+
+  // These will be called by WorkflowEditor to update search state
+  const updateSearchResults = useCallback((results: any[]) => {
+    setSearchResults(results);
+  }, []);
+
+  const updateCurrentSearchIndex = useCallback((index: number) => {
+    setCurrentSearchIndex(index);
+  }, []);
+
   return (
     <div className="app-container">
       <Router>
@@ -118,6 +202,16 @@ function App() {
           onConsoleOutput={handleConsoleOutput}
           onImportWorkflow={handleImportWorkflow}
           onExport={handleExport}
+          searchValue={searchValue}
+          searchResults={searchResults}
+          currentSearchIndex={currentSearchIndex}
+          isSearchFieldFocused={isSearchFieldFocused}
+          onSearchChange={handleSearchChange}
+          onSearchFocus={handleSearchFocus}
+          onSearchBlur={handleSearchBlur}
+          onSearchKeyDown={handleSearchKeyDown}
+          onRegisterToggleHelpModal={setToggleHelpModalCallback}
+          onRegisterFocusSearchField={setFocusSearchFieldCallback}
         >
           <Routes>
             <Route 
@@ -134,6 +228,14 @@ function App() {
                   onRegisterExport={setExportCallback}
                   onRegisterSave={setSaveCallback}
                   onRegisterImportWorkflow={setImportWorkflowCallback}
+                  onRegisterPerformSearch={setPerformSearchCallback}
+                  onRegisterFindNext={setFindNextCallback}
+                  onRegisterFindPrevious={setFindPreviousCallback}
+                  onSetSearchResults={updateSearchResults}
+                  onSetCurrentSearchIndex={updateCurrentSearchIndex}
+                  toggleHelpModalCallback={toggleHelpModalCallbackRef}
+                  focusSearchFieldCallback={focusSearchFieldCallbackRef}
+                  isSearchFieldFocused={isSearchFieldFocused}
                 />
               } 
             />
@@ -151,6 +253,14 @@ function App() {
                   onRegisterExport={setExportCallback}
                   onRegisterSave={setSaveCallback}
                   onRegisterImportWorkflow={setImportWorkflowCallback}
+                  onRegisterPerformSearch={setPerformSearchCallback}
+                  onRegisterFindNext={setFindNextCallback}
+                  onRegisterFindPrevious={setFindPreviousCallback}
+                  onSetSearchResults={updateSearchResults}
+                  onSetCurrentSearchIndex={updateCurrentSearchIndex}
+                  toggleHelpModalCallback={toggleHelpModalCallbackRef}
+                  focusSearchFieldCallback={focusSearchFieldCallbackRef}
+                  isSearchFieldFocused={isSearchFieldFocused}
                 />
               } 
             />

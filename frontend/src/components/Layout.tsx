@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Console from './Console';
 import LLMQueryPanel from './LLMQueryPanel';
 import HelpModal from './HelpModal';
@@ -17,6 +17,18 @@ interface LayoutProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
   onImportWorkflow?: (workflowData: any) => void;
   onExport?: () => void;
+  // Search functionality
+  searchValue?: string;
+  searchResults?: any[];
+  currentSearchIndex?: number;
+  isSearchFieldFocused?: boolean;
+  onSearchChange?: (value: string) => void;
+  onSearchFocus?: () => void;
+  onSearchBlur?: () => void;
+  onSearchKeyDown?: (e: React.KeyboardEvent) => void;
+  // Help modal functionality
+  onRegisterToggleHelpModal?: (callback: (() => void) | null) => void;
+  onRegisterFocusSearchField?: (callback: (() => void) | null) => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -32,9 +44,33 @@ const Layout: React.FC<LayoutProps> = ({
   onSave,
   onConsoleOutput,
   onImportWorkflow,
-  onExport
+  onExport,
+  // Search props
+  searchValue = '',
+  searchResults = [],
+  currentSearchIndex = 0,
+  isSearchFieldFocused = false,
+  onSearchChange,
+  onSearchFocus,
+  onSearchBlur,
+  onSearchKeyDown,
+  // Help modal registration
+  onRegisterToggleHelpModal,
+  onRegisterFocusSearchField
 }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Register callbacks with parent components
+  React.useEffect(() => {
+    if (onRegisterToggleHelpModal) {
+      onRegisterToggleHelpModal(() => setShowHelpModal(prev => !prev));
+    }
+    if (onRegisterFocusSearchField) {
+      onRegisterFocusSearchField(() => searchInputRef.current?.focus());
+    }
+  }, [onRegisterToggleHelpModal, onRegisterFocusSearchField]);
+
   return (
     <div className="layout">
       {/* Menu Bar */}
@@ -71,6 +107,28 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* Execution Controls */}
       <div className="execution-controls">
+        {/* Search Field */}
+        <div className="execution-search-container">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchValue}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            onFocus={onSearchFocus}
+            onBlur={onSearchBlur}
+            onKeyDown={onSearchKeyDown}
+            placeholder="Search nodes... (/ or Ctrl+F)"
+            className="execution-search-input"
+          />
+          
+          {/* Search Results Indicator */}
+          {searchResults && searchResults.length > 0 && (
+            <span className="execution-search-results">
+              {currentSearchIndex + 1}/{searchResults.length}
+            </span>
+          )}
+        </div>
+        
         <button 
           className="control-button disabled"
           disabled={true}

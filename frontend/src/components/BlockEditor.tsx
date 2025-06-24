@@ -9,6 +9,7 @@ const BlockEditor: React.FC = () => {
   const { nodeId } = useParams<{ nodeId: string }>();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
+  const [showCodePreview, setShowCodePreview] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const handleAddBlock = (type: string, position: Position) => {
@@ -101,23 +102,124 @@ const BlockEditor: React.FC = () => {
   };
 
   const generateCode = () => {
-    // Simple code generation from blocks
+    const imports = new Set<string>();
     let code = '';
-    blocks.forEach(block => {
-      switch (block.type) {
-        case 'variable_set':
-          code += `${block.properties.variableName} = "${block.properties.value}"\n`;
-          break;
-        case 'bash_command':
-          code += `subprocess.run("${block.properties.command}", shell=True)\n`;
-          break;
-        case 'curl_get':
-          code += `response = requests.get("${block.properties.url}")\n`;
-          break;
-        // Add more code generation logic
+    
+    // Add standard imports
+    imports.add('import re');
+    imports.add('import os');
+    imports.add('import json');
+    imports.add('import subprocess');
+    imports.add('import requests');
+    imports.add('from typing import Dict, List, Any, Optional');
+
+    // Handle empty blocks
+    if (blocks.length === 0) {
+      code = '# No blocks in editor\nprint("Empty block editor - add some blocks to generate code")\n';
+    } else {
+      // Sort blocks by position for logical execution order
+      const sortedBlocks = [...blocks].sort((a, b) => {
+        if (Math.abs(a.position.y - b.position.y) < 50) {
+          // If blocks are roughly on the same line, sort by x position
+          return a.position.x - b.position.x;
+        }
+        // Otherwise sort by y position (top to bottom)
+        return a.position.y - b.position.y;
+      });
+
+      // Generate code for each block
+      for (const block of sortedBlocks) {
+        const blockCode = generateBlockCode(block, imports);
+        if (blockCode.trim()) {
+          code += blockCode + '\n';
+        }
       }
-    });
-    return code;
+    }
+
+    // Combine imports and code
+    const importsCode = Array.from(imports).sort().join('\n');
+    return `${importsCode}\n\n# Generated block code\n\n${code}`;
+  };
+
+  const generateBlockCode = (block: Block, imports: Set<string>): string => {
+    const props = block.properties;
+    const blockVar = `${block.type}_${block.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    
+    switch (block.type) {
+      case 'variable_set':
+        return `# Set variable\n${props.variableName || 'var'} = ${JSON.stringify(props.value || '')}\n`;
+        
+      case 'variable_get':
+        return `# Get variable\n${blockVar}_result = ${props.variableName || 'var'}\n`;
+        
+      case 'text_input':
+        return `# Text input\n${blockVar}_text = ${JSON.stringify(props.text || '')}\n`;
+        
+      case 'text_join':
+        imports.add('from typing import Union');
+        return `# Join text\n${blockVar}_parts = [str(x) for x in [${props.parts?.join(', ') || '""'}]]\n${blockVar}_result = "${props.separator || ' '}".join(${blockVar}_parts)\n`;
+        
+      case 'text_split':
+        return `# Split text\n${blockVar}_result = (${props.text || '""'}).split("${props.separator || ' '}")\n`;
+        
+      case 'regex_match':
+        imports.add('import re');
+        const flags = [];
+        if (props.ignoreCase) flags.push('re.IGNORECASE');
+        if (props.multiline) flags.push('re.MULTILINE');
+        const flagsStr = flags.length > 0 ? ` | ${flags.join(' | ')}` : '';
+        return `# Regex match\n${blockVar}_pattern = re.compile(r"${props.pattern || ''}"${flagsStr})\n${blockVar}_result = ${blockVar}_pattern.findall(${props.text || '""'})\n`;
+        
+      case 'regex_replace':
+        imports.add('import re');
+        return `# Regex replace\n${blockVar}_result = re.sub(r"${props.pattern || ''}", "${props.replacement || ''}", ${props.text || '""'})\n`;
+        
+      case 'curl_get':
+        imports.add('import requests');
+        return `# HTTP GET request\ntry:\n    ${blockVar}_response = requests.get("${props.url || ''}", timeout=${props.timeout || 30})\n    ${blockVar}_result = ${blockVar}_response.text\nexcept Exception as e:\n    ${blockVar}_result = f"Error: {str(e)}"\n`;
+        
+      case 'curl_post':
+        imports.add('import requests');
+        imports.add('import json');
+        return `# HTTP POST request\ntry:\n    ${blockVar}_data = ${JSON.stringify(props.data || {})}\n    ${blockVar}_response = requests.post("${props.url || ''}", json=${blockVar}_data, timeout=${props.timeout || 30})\n    ${blockVar}_result = ${blockVar}_response.text\nexcept Exception as e:\n    ${blockVar}_result = f"Error: {str(e)}"\n`;
+        
+      case 'file_read':
+        return `# Read file\ntry:\n    with open("${props.filepath || ''}", "r", encoding="${props.encoding || 'utf-8'}") as f:\n        ${blockVar}_result = f.read()\nexcept Exception as e:\n    ${blockVar}_result = f"Error reading file: {str(e)}"\n`;
+        
+      case 'file_write':
+        return `# Write file\ntry:\n    with open("${props.filepath || ''}", "${props.mode || 'w'}", encoding="${props.encoding || 'utf-8'}") as f:\n        f.write(${props.content || '""'})\n    ${blockVar}_result = "File written successfully"\nexcept Exception as e:\n    ${blockVar}_result = f"Error writing file: {str(e)}"\n`;
+        
+      case 'bash_command':
+        imports.add('import subprocess');
+        return `# Execute bash command\ntry:\n    ${blockVar}_result = subprocess.run("${props.command || ''}", shell=True, capture_output=True, text=True, timeout=${props.timeout || 30})\n    ${blockVar}_output = ${blockVar}_result.stdout\n    ${blockVar}_error = ${blockVar}_result.stderr\nexcept Exception as e:\n    ${blockVar}_output = f"Error: {str(e)}"\n`;
+        
+      case 'if_condition':
+        return `# Conditional logic\nif ${props.condition || 'True'}:\n    # Add your conditional code here\n    ${blockVar}_result = "Condition was true"\nelse:\n    ${blockVar}_result = "Condition was false"\n`;
+        
+      case 'loop_for':
+        return `# For loop\n${blockVar}_results = []\nfor ${props.variable || 'item'} in ${props.iterable || 'range(10)'}:\n    # Add your loop code here\n    ${blockVar}_results.append(${props.variable || 'item'})\n${blockVar}_result = ${blockVar}_results\n`;
+        
+      case 'loop_while':
+        return `# While loop\n${blockVar}_count = 0\n${blockVar}_results = []\nwhile ${props.condition || 'False'} and ${blockVar}_count < ${props.maxIterations || 100}:\n    # Add your loop code here\n    ${blockVar}_results.append(${blockVar}_count)\n    ${blockVar}_count += 1\n${blockVar}_result = ${blockVar}_results\n`;
+        
+      case 'math_add':
+        return `# Math addition\n${blockVar}_result = (${props.a || 0}) + (${props.b || 0})\n`;
+        
+      case 'math_subtract':
+        return `# Math subtraction\n${blockVar}_result = (${props.a || 0}) - (${props.b || 0})\n`;
+        
+      case 'array_create':
+        return `# Create array\n${blockVar}_result = [${props.items?.map((item: any) => JSON.stringify(item)).join(', ') || ''}]\n`;
+        
+      case 'array_get':
+        return `# Get array item\ntry:\n    ${blockVar}_result = (${props.array || '[]'})[${props.index || 0}]\nexcept (IndexError, TypeError) as e:\n    ${blockVar}_result = f"Error accessing array: {str(e)}"\n`;
+        
+      case 'array_append':
+        return `# Append to array\n${blockVar}_array = list(${props.array || '[]'})\n${blockVar}_array.append(${JSON.stringify(props.item || '')})\n${blockVar}_result = ${blockVar}_array\n`;
+        
+      default:
+        return `# Unsupported block type: ${block.type}\n# Block ID: ${block.id}\n# Properties: ${JSON.stringify(props, null, 2).split('\n').map(line => `# ${line}`).join('\n')}\n`;
+    }
   };
 
   return (
@@ -139,6 +241,13 @@ const BlockEditor: React.FC = () => {
           </nav>
         </div>
         <div className="menu-right">
+          <button 
+            className="action-button btn-code flex items-center space-x-1"
+            onClick={() => setShowCodePreview(true)}
+          >
+            <Code size={14} />
+            <span>Code Preview</span>
+          </button>
           <button className="action-button btn-execute flex items-center space-x-1">
             <Play size={14} />
             <span>Test</span>

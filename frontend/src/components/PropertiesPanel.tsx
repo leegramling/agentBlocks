@@ -1,10 +1,12 @@
-import React, { useRef, useImperativeHandle, forwardRef } from 'react';
-import type { WorkflowNode } from '../types';
+import React, { useRef, useImperativeHandle, forwardRef, useState } from 'react';
+import type { WorkflowNode, Connection } from '../types';
 import VariablePicker from './VariablePicker';
+import { TemplateBasedPythonGenerator, TemplateBasedRustGenerator } from '../nodes/generators/TemplateBasedGenerator';
 
 interface PropertiesPanelProps {
   selectedNode: WorkflowNode | null;
   nodes: WorkflowNode[];
+  connections: Connection[];
   activeFunctionId?: string;
   onUpdateNode: (node: WorkflowNode) => void;
   onNodeSelect: (node: WorkflowNode) => void;
@@ -17,11 +19,26 @@ export interface PropertiesPanelRef {
 const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({ 
   selectedNode, 
   nodes,
+  connections,
   activeFunctionId,
   onUpdateNode,
   onNodeSelect
 }, ref) => {
   const propertyInputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
+  const [codeLanguage, setCodeLanguage] = useState<'python' | 'rust'>('python');
+
+  const generatePreviewCode = () => {
+    if (nodes.length === 0) return '// No nodes in workflow';
+    
+    // Generate code for the entire workflow using template-based generators
+    if (codeLanguage === 'python') {
+      const generator = new TemplateBasedPythonGenerator();
+      return generator.generateWorkflowCode(nodes, connections);
+    } else {
+      const generator = new TemplateBasedRustGenerator();
+      return generator.generateWorkflowCode(nodes, connections);
+    }
+  };
 
   useImperativeHandle(ref, () => ({
     focusFirstProperty: () => {
@@ -251,6 +268,68 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
             <div className="text-4xl mb-2">📋</div>
             <p className="empty-selection-text">Select a node to view its property table</p>
           </div>
+
+          {/* Code Preview Section - Always Show */}
+          <div style={{marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #374151'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+              <div style={{fontSize: '12px', fontWeight: '600', color: '#d1d5db'}}>
+                Workflow Code Preview
+              </div>
+              <div style={{display: 'flex', gap: '4px'}}>
+                <button
+                  onClick={() => setCodeLanguage('python')}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    borderRadius: '3px',
+                    border: 'none',
+                    backgroundColor: codeLanguage === 'python' ? '#3b82f6' : '#374151',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Python
+                </button>
+                <button
+                  onClick={() => setCodeLanguage('rust')}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    borderRadius: '3px',
+                    border: 'none',
+                    backgroundColor: codeLanguage === 'rust' ? '#ef4444' : '#374151',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Rust
+                </button>
+              </div>
+            </div>
+            
+            <textarea
+              value={generatePreviewCode()}
+              readOnly
+              style={{
+                width: '100%',
+                height: 'calc(100vh - 600px)',
+                minHeight: '200px',
+                padding: '8px',
+                backgroundColor: '#1f2937',
+                border: '1px solid #374151',
+                borderRadius: '4px',
+                color: '#f1f5f9',
+                fontSize: '11px',
+                fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                resize: 'vertical',
+                outline: 'none'
+              }}
+              placeholder="Generated code will appear here..."
+            />
+          </div>
+
         </div>
       </div>
     );
@@ -330,6 +409,67 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
                 No configurable properties for this node type
               </div>
             )}
+          </div>
+
+          {/* Code Preview Section */}
+          <div style={{marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #374151'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+              <div style={{fontSize: '12px', fontWeight: '600', color: '#d1d5db'}}>
+                Code Preview
+              </div>
+              <div style={{display: 'flex', gap: '4px'}}>
+                <button
+                  onClick={() => setCodeLanguage('python')}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    borderRadius: '3px',
+                    border: 'none',
+                    backgroundColor: codeLanguage === 'python' ? '#3b82f6' : '#374151',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Python
+                </button>
+                <button
+                  onClick={() => setCodeLanguage('rust')}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    borderRadius: '3px',
+                    border: 'none',
+                    backgroundColor: codeLanguage === 'rust' ? '#ef4444' : '#374151',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Rust
+                </button>
+              </div>
+            </div>
+            
+            <textarea
+              value={generatePreviewCode()}
+              readOnly
+              style={{
+                width: '100%',
+                height: 'calc(100vh - 600px)',
+                minHeight: '200px',
+                padding: '8px',
+                backgroundColor: '#1f2937',
+                border: '1px solid #374151',
+                borderRadius: '4px',
+                color: '#f1f5f9',
+                fontSize: '11px',
+                fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                resize: 'vertical',
+                outline: 'none'
+              }}
+              placeholder="Generated code will appear here..."
+            />
           </div>
 
         </div>

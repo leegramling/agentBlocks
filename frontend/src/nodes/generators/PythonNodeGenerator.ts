@@ -22,12 +22,13 @@ export class PythonNodeGenerator {
     if (nodes.length === 0) {
       code = '# No nodes in workflow\nprint("Empty workflow - add some nodes to generate code")\n';
     } else {
-      // Generate code for each node in execution order
-      const executionOrder = this.getExecutionOrder(nodes, connections);
-      console.log('Execution order:', executionOrder.map(n => `${n.type}:${n.id}`));
+      // Only include top-level nodes (nodes without parentId) in the main execution order
+      const topLevelNodes = nodes.filter(n => !n.parentId);
+      const executionOrder = this.getExecutionOrder(topLevelNodes, connections);
+      console.log('Top-level execution order:', executionOrder.map(n => `${n.type}:${n.id}`));
       
       for (const node of executionOrder) {
-        code += this.generateNodeCode(node, connections);
+        code += this.generateNodeCode(node, connections, nodes);
         code += '\n';
       }
     }
@@ -39,7 +40,7 @@ export class PythonNodeGenerator {
     return result;
   }
 
-  private generateNodeCode(node: WorkflowNode, connections: Connection[]): string {
+  private generateNodeCode(node: WorkflowNode, connections: Connection[], allNodes?: WorkflowNode[]): string {
     switch (node.type) {
       case 'grep':
         return this.generateGrepNode(node, connections);
@@ -66,7 +67,7 @@ export class PythonNodeGenerator {
       case 'while':
         return this.generateWhileNode(node, connections);
       case 'function':
-        return this.generateFunctionNode(node, connections);
+        return this.generateFunctionNode(node, connections, allNodes || []);
       default:
         return `# Unsupported node type: ${node.type}\n# Node ID: ${node.id}\n# Properties: ${JSON.stringify(node.properties, null, 2)}\n`;
     }
@@ -204,7 +205,22 @@ export class PythonNodeGenerator {
     const varName = props.name || `var_${node.id}`;
     const value = props.value || '';
     
-    const code = `# Variable node: ${node.id}\n${varName} = ${JSON.stringify(value)}\n`;
+    // Format the value based on its type
+    let formattedValue: string;
+    if (value === '') {
+      formattedValue = 'None';
+    } else if (value === 'true' || value === 'false') {
+      // Boolean values
+      formattedValue = value === 'true' ? 'True' : 'False';
+    } else if (!isNaN(Number(value)) && value.trim() !== '') {
+      // Numeric values (integers or floats)
+      formattedValue = value;
+    } else {
+      // String values
+      formattedValue = JSON.stringify(value);
+    }
+    
+    const code = `# Variable node: ${node.id}\n${varName} = ${formattedValue}\n`;
     
     this.variables.set(node.id, varName);
     return code;
@@ -222,14 +238,32 @@ export class PythonNodeGenerator {
     let printVar = '';
     if (inputConnection) {
       const sourceVar = this.variables.get(`${inputConnection.source_node}_${inputConnection.source_output}`);
-      printVar = sourceVar || `"${message}"`;
+      printVar = sourceVar || this.formatStringForPrint(message);
     } else if (this.variables.has(message)) {
       printVar = this.variables.get(message)!;
     } else {
-      printVar = `"${message}"`;
+      printVar = this.formatStringForPrint(message);
     }
     
     return `# Print node: ${node.id}\nprint(${printVar})\n`;
+  }
+
+  private formatStringForPrint(text: string): string {
+    if (!text) return '""';
+    
+    // Check if it's already an f-string
+    if (text.startsWith('f"') && text.endsWith('"')) {
+      return text;
+    }
+    
+    // Check if text contains variable references like {variable}
+    const variablePattern = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/;
+    if (variablePattern.test(text)) {
+      return `f"${text}"`;
+    }
+    
+    // Regular string
+    return `"${text}"`;
   }
 
   private generatePyCodeNode(node: WorkflowNode, connections: Connection[]): string {
@@ -457,18 +491,36 @@ export class PythonNodeGenerator {
     return code;
   }
 
-  private generateFunctionNode(node: WorkflowNode, connections: Connection[]): string {
+  private generateFunctionNode(node: WorkflowNode, connections: Connection[], allNodes: WorkflowNode[]): string {
     const props = node.properties;
     const nodeVar = `${node.type}_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
     
     const functionName = props.function_name || `function_${node.id}`;
-    const parameters = props.parameters || '[]';
+    const parameters = props.parameters || '';
     const returnType = props.return_type || 'Any';
+    
+    // Find all child nodes of this function
+    const childNodes = allNodes.filter(n => n.parentId === node.id);
+    const childExecutionOrder = this.getExecutionOrder(childNodes, connections);
     
     let code = `# Function node: ${node.id}\n`;
     code += `def ${functionName}(${parameters}):\n`;
     code += `    """Generated function from node ${node.id}"""\n`;
-    code += `    # Function body - connect nodes to execute here\n`;
+    
+    if (childNodes.length > 0) {
+      // Generate code for child nodes inside the function
+      for (const childNode of childExecutionOrder) {
+        const childCode = this.generateNodeCode(childNode, connections);
+        // Indent the child code to be inside the function
+        const indentedCode = childCode.split('\n').map(line => 
+          line.trim() ? `    ${line}` : line
+        ).join('\n');
+        code += indentedCode;
+      }
+    } else {
+      code += `    # Function body - connect nodes to execute here\n`;
+    }
+    
     code += `    return None\n\n`;
     
     // Call the function

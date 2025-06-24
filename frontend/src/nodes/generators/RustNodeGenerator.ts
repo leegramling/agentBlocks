@@ -5,12 +5,14 @@ export class RustNodeGenerator {
   private imports: Set<string> = new Set();
   private structs: Set<string> = new Set();
   private variables: Map<string, string> = new Map();
+  private helperFunctions: Set<string> = new Set();
 
   generateWorkflowCode(nodes: WorkflowNode[], connections: Connection[]): string {
     console.log('RustNodeGenerator.generateWorkflowCode called with:', nodes.length, 'nodes');
     this.imports.clear();
     this.structs.clear();
     this.variables.clear();
+    this.helperFunctions.clear();
 
     // Add standard imports and dependencies
     this.imports.add('use std::collections::HashMap;');
@@ -35,12 +37,13 @@ export class RustNodeGenerator {
       code += '    // No nodes in workflow\n';
       code += '    println!("Empty workflow - add some nodes to generate code");\n';
     } else {
-      // Generate code for each node in execution order
-      const executionOrder = this.getExecutionOrder(nodes, connections);
-      console.log('Rust execution order:', executionOrder.map(n => `${n.type}:${n.id}`));
+      // Only include top-level nodes (nodes without parentId) in the main execution order
+      const topLevelNodes = nodes.filter(n => !n.parentId);
+      const executionOrder = this.getExecutionOrder(topLevelNodes, connections);
+      console.log('Rust top-level execution order:', executionOrder.map(n => `${n.type}:${n.id}`));
       
       for (const node of executionOrder) {
-        const nodeCode = this.generateNodeCode(node, connections);
+        const nodeCode = this.generateNodeCode(node, connections, nodes);
         code += this.indent(nodeCode, 1);
       }
     }
@@ -61,8 +64,9 @@ export class RustNodeGenerator {
   }
 
   private generateStructs(): void {
-    // GrepMatch struct
-    this.structs.add(`#[derive(Debug, Clone)]
+    // Only add grep structs if grep nodes are used
+    if (this.helperFunctions.has('grep')) {
+      this.structs.add(`#[derive(Debug, Clone)]
 struct GrepMatch {
     line_number: Option<usize>,
     line_content: String,
@@ -78,9 +82,10 @@ struct GrepResult {
     success: bool,
     error: Option<String>,
 }`);
+    }
   }
 
-  private generateNodeCode(node: WorkflowNode, connections: Connection[]): string {
+  private generateNodeCode(node: WorkflowNode, connections: Connection[], allNodes?: WorkflowNode[]): string {
     switch (node.type) {
       case 'grep':
         return this.generateGrepNode(node, connections);
@@ -107,7 +112,7 @@ struct GrepResult {
       case 'while':
         return this.generateWhileNode(node, connections);
       case 'function':
-        return this.generateFunctionNode(node, connections);
+        return this.generateFunctionNode(node, connections, allNodes || []);
       default:
         return `// Unsupported node type: ${node.type}\n// Node ID: ${node.id}\n// Properties: ${JSON.stringify(node.properties, null, 2)}\n`;
     }
@@ -116,6 +121,9 @@ struct GrepResult {
   private generateGrepNode(node: WorkflowNode, connections: Connection[]): string {
     const props = node.properties;
     const nodeVar = `${node.type}_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    
+    // Add grep helper functions when grep node is used
+    this.helperFunctions.add('grep');
     
     // Get input connections
     const inputConnections = connections.filter(c => c.target_node === node.id);
@@ -210,7 +218,26 @@ struct GrepResult {
     const varName = this.sanitizeIdentifier(props.name || `var_${node.id}`);
     const value = props.value || '';
     
-    const code = `// Variable node: ${node.id}\nlet ${varName} = ${this.rustStringLiteral(value)};\n\n`;
+    // Format the value based on its type
+    let formattedValue: string;
+    if (value === '') {
+      formattedValue = 'String::new()';
+    } else if (value === 'true' || value === 'false') {
+      // Boolean values
+      formattedValue = value;
+    } else if (!isNaN(Number(value)) && value.trim() !== '') {
+      // Numeric values (integers or floats)
+      if (value.includes('.')) {
+        formattedValue = `${value}f64`;
+      } else {
+        formattedValue = `${value}i32`;
+      }
+    } else {
+      // String values
+      formattedValue = this.rustStringLiteral(value);
+    }
+    
+    const code = `// Variable node: ${node.id}\nlet ${varName} = ${formattedValue};\n\n`;
     
     this.variables.set(node.id, varName);
     return code;
@@ -228,14 +255,38 @@ struct GrepResult {
     let printVar = '';
     if (inputConnection) {
       const sourceVar = this.variables.get(`${inputConnection.source_node}_${inputConnection.source_output}`);
-      printVar = sourceVar || `"${message}"`;
+      printVar = sourceVar || this.formatStringForRustPrint(message);
     } else if (this.variables.has(message)) {
       printVar = this.variables.get(message)!;
     } else {
-      printVar = `"${message}"`;
+      printVar = this.formatStringForRustPrint(message);
     }
     
     return `// Print node: ${node.id}\nprintln!("{}", ${printVar});\n\n`;
+  }
+
+  private formatStringForRustPrint(text: string): string {
+    if (!text) return '""';
+    
+    // Check if text contains variable references like {variable}
+    const variablePattern = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+    if (variablePattern.test(text)) {
+      // Convert to Rust format! macro
+      const formattedText = text.replace(variablePattern, '{}');
+      const variables = [];
+      let match;
+      variablePattern.lastIndex = 0; // Reset regex
+      while ((match = variablePattern.exec(text)) !== null) {
+        variables.push(match[1]);
+      }
+      
+      if (variables.length > 0) {
+        return `format!("${formattedText}", ${variables.join(', ')})`;
+      }
+    }
+    
+    // Regular string
+    return this.rustStringLiteral(text);
   }
 
   private generateRustEquivalentNode(node: WorkflowNode, connections: Connection[]): string {
@@ -477,7 +528,7 @@ struct GrepResult {
     return code;
   }
 
-  private generateFunctionNode(node: WorkflowNode, connections: Connection[]): string {
+  private generateFunctionNode(node: WorkflowNode, connections: Connection[], allNodes: WorkflowNode[]): string {
     const props = node.properties;
     const nodeVar = `${node.type}_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
     
@@ -485,10 +536,28 @@ struct GrepResult {
     const parameters = props.parameters || '';
     const returnType = props.return_type || '()';
     
+    // Find all child nodes of this function
+    const childNodes = allNodes.filter(n => n.parentId === node.id);
+    const childExecutionOrder = this.getExecutionOrder(childNodes, connections);
+    
     let code = `// Function node: ${node.id}\n`;
     code += `fn ${this.sanitizeIdentifier(functionName)}(${parameters}) -> ${returnType} {\n`;
-    code += `    // Function body - connect nodes to execute here\n`;
-    code += `    // Generated function from node ${node.id}\n`;
+    
+    if (childNodes.length > 0) {
+      // Generate code for child nodes inside the function
+      for (const childNode of childExecutionOrder) {
+        const childCode = this.generateNodeCode(childNode, connections, allNodes);
+        // Indent the child code to be inside the function
+        const indentedCode = childCode.split('\n').map(line => 
+          line.trim() ? `    ${line}` : line
+        ).join('\n');
+        code += indentedCode;
+      }
+    } else {
+      code += `    // Function body - connect nodes to execute here\n`;
+      code += `    // Generated function from node ${node.id}\n`;
+    }
+    
     if (returnType === '()') {
       code += `}\n\n`;
       code += `${this.sanitizeIdentifier(functionName)}();\n`;
@@ -505,7 +574,11 @@ struct GrepResult {
   }
 
   private generateHelperFunctions(): string {
-    return `
+    let functions = '';
+    
+    // Only include grep helper functions if grep nodes are used
+    if (this.helperFunctions.has('grep')) {
+      functions += `
 // Helper functions for grep operations
 
 fn execute_grep_on_text(
@@ -647,6 +720,9 @@ fn execute_grep_recursive(
         error: None,
     }
 }`;
+    }
+    
+    return functions;
   }
 
   private getExecutionOrder(nodes: WorkflowNode[], connections: Connection[]): WorkflowNode[] {

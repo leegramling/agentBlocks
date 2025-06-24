@@ -17,7 +17,7 @@ const Console: React.FC<ConsoleProps> = ({
   onExecute, 
   onClear,
   onGeneratePythonCode,
-  onGenerateRustCode 
+  onGenerateRustCode
 }) => {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [generatedPythonCode, setGeneratedPythonCode] = useState('');
@@ -64,7 +64,10 @@ const Console: React.FC<ConsoleProps> = ({
     <div className="console-panel">
       {/* Console Header */}
       <div className="console-header">
-        <span className="console-title">⚡ Console Output</span>
+        <div className="console-left">
+          <span className="console-title">⚡ Console Output</span>
+        </div>
+        
         <div className="console-controls">
           <button 
             className="console-button"
