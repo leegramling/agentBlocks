@@ -100,6 +100,19 @@ const BlockEditor: React.FC = () => {
     e.preventDefault();
   };
 
+  const getExecutionOrder = (blocks: Block[]): Block[] => {
+    // Simple execution order based on connections and position
+    // For now, use position-based ordering as fallback until connections are implemented
+    return blocks.sort((a, b) => {
+      if (Math.abs(a.position.y - b.position.y) < 50) {
+        // If blocks are roughly on the same line, sort by x position
+        return a.position.x - b.position.x;
+      }
+      // Otherwise sort by y position (top to bottom)
+      return a.position.y - b.position.y;
+    });
+  };
+
   const generateCode = () => {
     const imports = new Set<string>();
     let code = '';
@@ -116,18 +129,12 @@ const BlockEditor: React.FC = () => {
     if (blocks.length === 0) {
       code = '# No blocks in editor\nprint("Empty block editor - add some blocks to generate code")\n';
     } else {
-      // Sort blocks by position for logical execution order
-      const sortedBlocks = [...blocks].sort((a, b) => {
-        if (Math.abs(a.position.y - b.position.y) < 50) {
-          // If blocks are roughly on the same line, sort by x position
-          return a.position.x - b.position.x;
-        }
-        // Otherwise sort by y position (top to bottom)
-        return a.position.y - b.position.y;
-      });
+      // Use parent-child hierarchy instead of position-based sorting
+      const topLevelBlocks = blocks.filter(block => !block.parentId);
+      const executionOrder = getExecutionOrder(topLevelBlocks);
 
-      // Generate code for each block
-      for (const block of sortedBlocks) {
+      // Generate code for each block in execution order
+      for (const block of executionOrder) {
         const blockCode = generateBlockCode(block, imports);
         if (blockCode.trim()) {
           code += blockCode + '\n';
@@ -143,6 +150,26 @@ const BlockEditor: React.FC = () => {
   const generateBlockCode = (block: Block, imports: Set<string>): string => {
     const props = block.properties;
     const blockVar = `${block.type}_${block.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    
+    // Helper function to generate child block code
+    const generateChildBlocks = (parentBlock: Block, indentLevel: number = 1): string => {
+      const childBlocks = blocks.filter(b => b.parentId === parentBlock.id);
+      const childExecutionOrder = getExecutionOrder(childBlocks);
+      let childCode = '';
+      
+      for (const childBlock of childExecutionOrder) {
+        const childBlockCode = generateBlockCode(childBlock, imports);
+        if (childBlockCode.trim()) {
+          // Indent child code
+          const indentedCode = childBlockCode.split('\n').map(line => 
+            line.trim() ? '    '.repeat(indentLevel) + line : line
+          ).join('\n');
+          childCode += indentedCode + '\n';
+        }
+      }
+      
+      return childCode || '    '.repeat(indentLevel) + '# No child blocks\n    '.repeat(indentLevel) + 'pass\n';
+    };
     
     switch (block.type) {
       case 'variable_set':
@@ -193,14 +220,20 @@ const BlockEditor: React.FC = () => {
         imports.add('import subprocess');
         return `# Execute bash command\ntry:\n    ${blockVar}_result = subprocess.run("${props.command || ''}", shell=True, capture_output=True, text=True, timeout=${props.timeout || 30})\n    ${blockVar}_output = ${blockVar}_result.stdout\n    ${blockVar}_error = ${blockVar}_result.stderr\nexcept Exception as e:\n    ${blockVar}_output = f"Error: {str(e)}"\n`;
         
-      case 'if_condition':
-        return `# Conditional logic\nif ${props.condition || 'True'}:\n    # Add your conditional code here\n    ${blockVar}_result = "Condition was true"\nelse:\n    ${blockVar}_result = "Condition was false"\n`;
+      case 'if_condition': {
+        const ifChildCode = generateChildBlocks(block);
+        return `# Conditional logic\nif ${props.condition || 'True'}:\n${ifChildCode}    ${blockVar}_result = "Condition was true"\nelse:\n    ${blockVar}_result = "Condition was false"\n`;
+      }
         
-      case 'loop_for':
-        return `# For loop\n${blockVar}_results = []\nfor ${props.variable || 'item'} in ${props.iterable || 'range(10)'}:\n    # Add your loop code here\n    ${blockVar}_results.append(${props.variable || 'item'})\n${blockVar}_result = ${blockVar}_results\n`;
+      case 'loop_for': {
+        const forChildCode = generateChildBlocks(block);
+        return `# For loop\n${blockVar}_results = []\nfor ${props.variable || 'item'} in ${props.iterable || 'range(10)'}:\n${forChildCode}    ${blockVar}_results.append(${props.variable || 'item'})\n${blockVar}_result = ${blockVar}_results\n`;
+      }
         
-      case 'loop_while':
-        return `# While loop\n${blockVar}_count = 0\n${blockVar}_results = []\nwhile ${props.condition || 'False'} and ${blockVar}_count < ${props.maxIterations || 100}:\n    # Add your loop code here\n    ${blockVar}_results.append(${blockVar}_count)\n    ${blockVar}_count += 1\n${blockVar}_result = ${blockVar}_results\n`;
+      case 'loop_while': {
+        const whileChildCode = generateChildBlocks(block);
+        return `# While loop\n${blockVar}_count = 0\n${blockVar}_results = []\nwhile ${props.condition || 'False'} and ${blockVar}_count < ${props.maxIterations || 100}:\n${whileChildCode}    ${blockVar}_results.append(${blockVar}_count)\n    ${blockVar}_count += 1\n${blockVar}_result = ${blockVar}_results\n`;
+      }
         
       case 'math_add':
         return `# Math addition\n${blockVar}_result = (${props.a || 0}) + (${props.b || 0})\n`;

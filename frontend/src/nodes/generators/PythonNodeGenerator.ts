@@ -61,11 +61,11 @@ export class PythonNodeGenerator {
       case 'write_file':
         return this.generateWriteFileNode(node, connections);
       case 'if-then':
-        return this.generateIfThenNode(node, connections);
+        return this.generateIfThenNode(node, connections, allNodes);
       case 'foreach':
-        return this.generateForeachNode(node, connections);
+        return this.generateForeachNode(node, connections, allNodes);
       case 'while':
-        return this.generateWhileNode(node, connections);
+        return this.generateWhileNode(node, connections, allNodes);
       case 'function':
         return this.generateFunctionNode(node, connections, allNodes || []);
       default:
@@ -408,7 +408,7 @@ export class PythonNodeGenerator {
     return code;
   }
 
-  private generateIfThenNode(node: WorkflowNode, connections: Connection[]): string {
+  private generateIfThenNode(node: WorkflowNode, connections: Connection[], allNodes?: WorkflowNode[]): string {
     const props = node.properties;
     const nodeVar = `${node.type}_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
     
@@ -425,10 +425,28 @@ export class PythonNodeGenerator {
       conditionVar = sourceVar || condition;
     }
     
+    // Find all child nodes of this if-then
+    const childNodes = allNodes?.filter(n => n.parentId === node.id) || [];
+    const childExecutionOrder = this.getExecutionOrder(childNodes, connections);
+    
     let code = `# If-Then node: ${node.id}\n`;
     code += `${nodeVar}_condition = ${conditionVar}\n`;
     code += `if ${nodeVar}_condition:\n`;
-    code += `    # Then branch - connect nodes to execute here\n`;
+    
+    if (childNodes.length > 0) {
+      // Generate code for child nodes inside the if block
+      for (const childNode of childExecutionOrder) {
+        const childCode = this.generateNodeCode(childNode, connections, allNodes);
+        // Indent the child code to be inside the if block
+        const indentedCode = childCode.split('\n').map(line => 
+          line.trim() ? `    ${line}` : line
+        ).join('\n');
+        code += indentedCode;
+      }
+    } else {
+      code += `    # Then branch - connect nodes to execute here\n`;
+    }
+    
     code += `    ${nodeVar}_result = True\n`;
     code += `else:\n`;
     code += `    # Else branch\n`;
@@ -439,7 +457,7 @@ export class PythonNodeGenerator {
     return code;
   }
 
-  private generateForeachNode(node: WorkflowNode, connections: Connection[]): string {
+  private generateForeachNode(node: WorkflowNode, connections: Connection[], allNodes?: WorkflowNode[]): string {
     const props = node.properties;
     const nodeVar = `${node.type}_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
     
@@ -457,11 +475,29 @@ export class PythonNodeGenerator {
       iterableVar = sourceVar || iterable;
     }
     
+    // Find all child nodes of this foreach
+    const childNodes = allNodes?.filter(n => n.parentId === node.id) || [];
+    const childExecutionOrder = this.getExecutionOrder(childNodes, connections);
+    
     let code = `# ForEach node: ${node.id}\n`;
     code += `${nodeVar}_iterable = ${iterableVar}\n`;
     code += `${nodeVar}_results = []\n`;
     code += `for ${itemVar} in ${nodeVar}_iterable:\n`;
-    code += `    # Loop body - connect nodes to execute here\n`;
+    
+    if (childNodes.length > 0) {
+      // Generate code for child nodes inside the loop
+      for (const childNode of childExecutionOrder) {
+        const childCode = this.generateNodeCode(childNode, connections, allNodes);
+        // Indent the child code to be inside the loop
+        const indentedCode = childCode.split('\n').map(line => 
+          line.trim() ? `    ${line}` : line
+        ).join('\n');
+        code += indentedCode;
+      }
+    } else {
+      code += `    # Loop body - connect nodes to execute here\n`;
+    }
+    
     code += `    ${nodeVar}_results.append(${itemVar})\n`;
     
     this.variables.set(`${node.id}_results`, `${nodeVar}_results`);
@@ -470,18 +506,36 @@ export class PythonNodeGenerator {
     return code;
   }
 
-  private generateWhileNode(node: WorkflowNode, connections: Connection[]): string {
+  private generateWhileNode(node: WorkflowNode, connections: Connection[], allNodes?: WorkflowNode[]): string {
     const props = node.properties;
     const nodeVar = `${node.type}_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
     
     const condition = props.condition || 'False';
     const maxIterations = props.max_iterations || 100;
     
+    // Find all child nodes of this while loop
+    const childNodes = allNodes?.filter(n => n.parentId === node.id) || [];
+    const childExecutionOrder = this.getExecutionOrder(childNodes, connections);
+    
     let code = `# While node: ${node.id}\n`;
     code += `${nodeVar}_iterations = 0\n`;
     code += `${nodeVar}_max_iterations = ${maxIterations}\n`;
     code += `while ${condition} and ${nodeVar}_iterations < ${nodeVar}_max_iterations:\n`;
-    code += `    # Loop body - connect nodes to execute here\n`;
+    
+    if (childNodes.length > 0) {
+      // Generate code for child nodes inside the loop
+      for (const childNode of childExecutionOrder) {
+        const childCode = this.generateNodeCode(childNode, connections, allNodes);
+        // Indent the child code to be inside the loop
+        const indentedCode = childCode.split('\n').map(line => 
+          line.trim() ? `    ${line}` : line
+        ).join('\n');
+        code += indentedCode;
+      }
+    } else {
+      code += `    # Loop body - connect nodes to execute here\n`;
+    }
+    
     code += `    ${nodeVar}_iterations += 1\n`;
     code += `    # Update condition variable here\n`;
     code += `    break  # Prevent infinite loop in generated code\n`;

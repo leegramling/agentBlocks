@@ -67,6 +67,9 @@ export interface Block {
   properties: Record<string, any>;
   inputs: string[];
   outputs: string[];
+  parentId?: string; // Parent block for nesting (loops, conditionals)
+  children?: string[]; // Child block IDs for parent blocks
+  indentLevel?: number; // Visual indentation level
 }
 
 export type NodeType = 
