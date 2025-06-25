@@ -2157,6 +2157,26 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onConsoleOutput?.(prev => [...prev, '✅ Workflow execution completed']);
   }, [nodes, connections, activeFunctionId, generatePythonCode, onConsoleOutput]);
 
+  // Register remaining callbacks that are defined after JSX return
+  if (onRegisterExecute) {
+    console.log('Direct registration: Registering executeWorkflow');
+    onRegisterExecute(executeWorkflow);
+  }
+  
+  if (onRegisterSave) {
+    console.log('Direct registration: Registering saveWorkflow');
+    onRegisterSave(saveWorkflow);
+  }
+  
+  if (onRegisterExport) {
+    console.log('Direct registration: Registering exportWorkflow');
+    onRegisterExport(exportWorkflow);
+  }
+  
+  if (onRegisterImportWorkflow) {
+    console.log('Direct registration: Registering handleImportWorkflow');
+    onRegisterImportWorkflow(handleImportWorkflow);
+  }
 
   // Register search results and index updates
   useEffect(() => {
