@@ -53,6 +53,12 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   focusSearchFieldCallback,
   isSearchFieldFocused = false
 }) => {
+  console.log('WorkflowEditor component rendering');
+  
+  // Test if useEffect works at all
+  useEffect(() => {
+    console.log('Basic useEffect is working!');
+  }, []);
   
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -729,7 +735,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [nodes, handleNodeSelect, onConsoleOutput]);
 
-  // Register search callback directly since useEffect isn't working reliably
+  // Register search and find callbacks directly (these are defined above)
   if (onRegisterPerformSearch) {
     onRegisterPerformSearch(performSearch);
   }
@@ -1461,6 +1467,30 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [filteredNodeTypes, selectedInsertIndex, handleInsertNode]);
 
+  // Store registration functions to call later
+  const registrationFunctionsRef = useRef({
+    onRegisterGeneratePythonCode,
+    onRegisterGenerateRustCode,
+    onRegisterExecute,
+    onRegisterSave,
+    onRegisterImportWorkflow,
+    onRegisterExport,
+    onRegisterNew
+  });
+
+  // Update refs when props change
+  registrationFunctionsRef.current = {
+    onRegisterGeneratePythonCode,
+    onRegisterGenerateRustCode,
+    onRegisterExecute,
+    onRegisterSave,
+    onRegisterImportWorkflow,
+    onRegisterExport,
+    onRegisterNew
+  };
+
+  console.log('About to return component JSX...');
+
   return (
     <div className="editor-workspace">
       {/* Block Palette - shown only when F2 is pressed */}
@@ -1989,11 +2019,15 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 
   // Generate Python code
   const generatePythonCode = useCallback(() => {
+    console.log('generatePythonCode called, nodes:', nodes.length, 'connections:', connections.length);
     onConsoleOutput?.(prev => [...prev, '🐍 Generating Python code...']);
     onConsoleOutput?.(prev => [...prev, `📊 Processing ${nodes.length} nodes and ${connections.length} connections`]);
     
     const functionNodes = nodes.filter(n => n.type === 'function');
     const regularNodes = nodes.filter(n => n.type !== 'function');
+    
+    console.log('Function nodes:', functionNodes.map(n => ({ id: n.id, type: n.type, name: n.properties?.function_name })));
+    console.log('Regular nodes:', regularNodes.map(n => ({ id: n.id, type: n.type, parent: n.parentId })));
     
     onConsoleOutput?.(prev => [...prev, `🔧 Found ${functionNodes.length} functions: ${functionNodes.map(n => n.properties?.function_name || 'unnamed').join(', ')}`]);
     onConsoleOutput?.(prev => [...prev, `📦 Found ${regularNodes.length} regular nodes: ${regularNodes.map(n => n.type).join(', ')}`]);
@@ -2001,11 +2035,16 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     const generator = new PythonNodeGenerator();
     const result = generator.generateWorkflowCode(nodes, connections);
     
+    console.log('Generated Python code:', result);
     onConsoleOutput?.(prev => [...prev, `✅ Generated Python code (${result.length} characters, ${result.split('\n').length} lines)`]);
     
     // Show first few lines of code
-    const codePreview = result.split('\n').slice(0, 3).join('\n');
-    onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
+    if (result.length > 0) {
+      const codePreview = result.split('\n').slice(0, 3).join('\n');
+      onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
+    } else {
+      onConsoleOutput?.(prev => [...prev, '⚠️ No code generated - check node structure']);
+    }
     
     return result;
   }, [nodes, connections, onConsoleOutput]);
@@ -2122,49 +2161,40 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onConsoleOutput?.(prev => [...prev, '✅ Workflow execution completed']);
   }, [nodes, connections, activeFunctionId, generatePythonCode, onConsoleOutput]);
 
-  // Register callbacks
-  useEffect(() => {
-    if (onRegisterExecute) {
-      onRegisterExecute(executeWorkflow);
-    }
-  }, [onRegisterExecute, executeWorkflow]);
+  console.log('DEBUG: Reached end of executeWorkflow function definition');
 
-  useEffect(() => {
-    if (onRegisterGeneratePythonCode) {
-      onRegisterGeneratePythonCode(generatePythonCode);
-    }
-  }, [onRegisterGeneratePythonCode, generatePythonCode]);
-
-  useEffect(() => {
-    if (onRegisterGenerateRustCode) {
-      onRegisterGenerateRustCode(generateRustCode);
-    }
-  }, [onRegisterGenerateRustCode, generateRustCode]);
-
-  useEffect(() => {
-    if (onRegisterSave) {
-      onRegisterSave(saveWorkflow);
-    }
-  }, [onRegisterSave, saveWorkflow]);
-
-  useEffect(() => {
-    if (onRegisterImportWorkflow) {
-      onRegisterImportWorkflow(handleImportWorkflow);
-    }
-  }, [onRegisterImportWorkflow, handleImportWorkflow]);
-
-  useEffect(() => {
-    if (onRegisterExport) {
-      onRegisterExport(exportWorkflow);
-    }
-  }, [onRegisterExport, exportWorkflow]);
-
-  useEffect(() => {
-    if (onRegisterNew) {
-      onRegisterNew(resetWorkflow);
-    }
-  }, [onRegisterNew, resetWorkflow]);
-
+  // Direct callback registration - ALL functions are now defined above
+  console.log('DIRECT REGISTRATION: All functions defined, registering callbacks now');
+  const refs = registrationFunctionsRef.current;
+  
+  if (refs.onRegisterGeneratePythonCode) {
+    console.log('DIRECT: Registering generatePythonCode callback');
+    refs.onRegisterGeneratePythonCode(generatePythonCode);
+  }
+  if (refs.onRegisterGenerateRustCode) {
+    console.log('DIRECT: Registering generateRustCode callback');
+    refs.onRegisterGenerateRustCode(generateRustCode);
+  }
+  if (refs.onRegisterExecute) {
+    console.log('DIRECT: Registering execute callback');
+    refs.onRegisterExecute(executeWorkflow);
+  }
+  if (refs.onRegisterSave) {
+    console.log('DIRECT: Registering save callback');
+    refs.onRegisterSave(saveWorkflow);
+  }
+  if (refs.onRegisterImportWorkflow) {
+    console.log('DIRECT: Registering import callback');
+    refs.onRegisterImportWorkflow(handleImportWorkflow);
+  }
+  if (refs.onRegisterExport) {
+    console.log('DIRECT: Registering export callback');
+    refs.onRegisterExport(exportWorkflow);
+  }
+  if (refs.onRegisterNew) {
+    console.log('DIRECT: Registering new callback');
+    refs.onRegisterNew(resetWorkflow);
+  }
 
   // Register search results and index updates
   useEffect(() => {
@@ -2178,6 +2208,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       onSetCurrentSearchIndex(currentSearchIndex);
     }
   }, [onSetCurrentSearchIndex, currentSearchIndex]);
+
+
 };
 
 export default WorkflowEditor;
