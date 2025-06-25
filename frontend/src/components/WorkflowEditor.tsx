@@ -53,6 +53,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   focusSearchFieldCallback,
   isSearchFieldFocused = false
 }) => {
+  
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
@@ -728,6 +729,11 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [nodes, handleNodeSelect, onConsoleOutput]);
 
+  // Register search callback directly since useEffect isn't working reliably
+  if (onRegisterPerformSearch) {
+    onRegisterPerformSearch(performSearch);
+  }
+
   const findNext = useCallback(() => {
     if (searchResults.length === 0) return;
     
@@ -745,6 +751,14 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     handleNodeSelect(searchResults[prevIndex]);
     onConsoleOutput?.(prev => [...prev, `🔍 Match ${prevIndex + 1} of ${searchResults.length}`]);
   }, [searchResults, currentSearchIndex, handleNodeSelect, onConsoleOutput]);
+
+  // Register findNext and findPrevious callbacks directly
+  if (onRegisterFindNext) {
+    onRegisterFindNext(findNext);
+  }
+  if (onRegisterFindPrevious) {
+    onRegisterFindPrevious(findPrevious);
+  }
 
   // Keyboard handler for F2, 'i', navigation keys (moved after function definitions)
   useEffect(() => {
@@ -2151,24 +2165,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [onRegisterNew, resetWorkflow]);
 
-  // Register search callbacks
-  useEffect(() => {
-    if (onRegisterPerformSearch) {
-      onRegisterPerformSearch(performSearch);
-    }
-  }, [onRegisterPerformSearch, performSearch]);
-
-  useEffect(() => {
-    if (onRegisterFindNext) {
-      onRegisterFindNext(findNext);
-    }
-  }, [onRegisterFindNext, findNext]);
-
-  useEffect(() => {
-    if (onRegisterFindPrevious) {
-      onRegisterFindPrevious(findPrevious);
-    }
-  }, [onRegisterFindPrevious, findPrevious]);
 
   // Register search results and index updates
   useEffect(() => {
