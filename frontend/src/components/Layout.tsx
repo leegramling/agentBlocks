@@ -17,6 +17,7 @@ interface LayoutProps {
   onConsoleOutput?: (updater: (prev: string[]) => string[]) => void;
   onImportWorkflow?: (workflowData: any) => void;
   onExport?: () => void;
+  onNew?: () => void;
   // Search functionality
   searchValue?: string;
   searchResults?: any[];
@@ -45,6 +46,7 @@ const Layout: React.FC<LayoutProps> = ({
   onConsoleOutput,
   onImportWorkflow,
   onExport,
+  onNew,
   // Search props
   searchValue = '',
   searchResults = [],
@@ -59,7 +61,9 @@ const Layout: React.FC<LayoutProps> = ({
   onRegisterFocusSearchField
 }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showFileMenu, setShowFileMenu] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
 
   // Register callbacks with parent components
   React.useEffect(() => {
@@ -71,6 +75,20 @@ const Layout: React.FC<LayoutProps> = ({
     }
   }, [onRegisterToggleHelpModal, onRegisterFocusSearchField]);
 
+  // Close file menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
+        setShowFileMenu(false);
+      }
+    };
+
+    if (showFileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showFileMenu]);
+
   return (
     <div className="layout">
       {/* Menu Bar */}
@@ -78,7 +96,45 @@ const Layout: React.FC<LayoutProps> = ({
         <div className="menu-left">
           <h1 className="app-title">AgentBlocks</h1>
           <nav className="nav-menu">
-            <button className="nav-button">File</button>
+            <div className="nav-menu-item" ref={fileMenuRef}>
+              <button 
+                className="nav-button" 
+                onClick={() => setShowFileMenu(prev => !prev)}
+              >
+                File
+              </button>
+              {showFileMenu && (
+                <div className="dropdown-menu">
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      onNew?.();
+                      setShowFileMenu(false);
+                    }}
+                  >
+                    New
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      onSave?.();
+                      setShowFileMenu(false);
+                    }}
+                  >
+                    Save
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      onExport?.();
+                      setShowFileMenu(false);
+                    }}
+                  >
+                    Export
+                  </button>
+                </div>
+              )}
+            </div>
             <button className="nav-button">Edit</button>
             <button className="nav-button">View</button>
             <button className="nav-button">Workflow</button>

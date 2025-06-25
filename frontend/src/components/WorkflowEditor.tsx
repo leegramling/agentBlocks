@@ -21,6 +21,7 @@ interface WorkflowEditorProps {
   onRegisterSave?: (callback: () => void) => void;
   onRegisterImportWorkflow?: (callback: (workflowData: any) => void) => void;
   onRegisterExport?: (callback: () => void) => void;
+  onRegisterNew?: (callback: () => void) => void;
   onRegisterPerformSearch?: (callback: (term: string) => void) => void;
   onRegisterFindNext?: (callback: () => void) => void;
   onRegisterFindPrevious?: (callback: () => void) => void;
@@ -42,6 +43,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   onRegisterSave,
   onRegisterImportWorkflow,
   onRegisterExport,
+  onRegisterNew,
   onRegisterPerformSearch,
   onRegisterFindNext,
   onRegisterFindPrevious,
@@ -104,12 +106,13 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         onConsoleOutput?.(prev => [...prev, `⚠️ Could not restore from storage: ${error}`]);
       }
       
-      // If no saved workflow, create default main function
+      // If no saved workflow, create default workflow with main function, variable, and print
       const mainFunction: WorkflowNode = {
         id: 'main-function',
         type: 'function',
         position: { x: 100, y: 100 },
         panelId: undefined,
+        parentId: undefined,
         properties: {
           function_name: 'main',
           parameters: '',
@@ -119,9 +122,34 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         inputs: [],
         outputs: [{ id: 'output', name: 'Output', type: 'any' }],
       };
-      setNodes([mainFunction]);
+
+      // Create default variable node as child of main function
+      const variableNode: WorkflowNode = {
+        id: 'default-variable',
+        type: 'variable',
+        position: { x: 120, y: 166 }, // Below main function with indent
+        panelId: undefined,
+        parentId: 'main-function',
+        properties: getDefaultProperties('variable'),
+        inputs: getDefaultInputs('variable'),
+        outputs: getDefaultOutputs('variable'),
+      };
+
+      // Create default print node as child of main function
+      const printNode: WorkflowNode = {
+        id: 'default-print',
+        type: 'print',
+        position: { x: 120, y: 232 }, // Below variable node
+        panelId: undefined,
+        parentId: 'main-function',
+        properties: getDefaultProperties('print'),
+        inputs: getDefaultInputs('print'),
+        outputs: getDefaultOutputs('print'),
+      };
+
+      setNodes([mainFunction, variableNode, printNode]);
       setActiveFunctionId('main-function');
-      onConsoleOutput?.(prev => [...prev, '🎯 Created default main function']);
+      onConsoleOutput?.(prev => [...prev, '🎯 Created default workflow with main function, variable, and print nodes']);
     }
   }, [nodes.length, onConsoleOutput]);
 
@@ -231,7 +259,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onConsoleOutput?.(prev => [...prev, '🔄 Canvas refreshed - all nodes redrawn']);
   }, [onConsoleOutput]);
 
-  // Reset workflow to default with main function
+  // Reset workflow to default with main function, variable, and print
   const resetWorkflow = useCallback(() => {
     // Clear localStorage
     localStorage.removeItem('agentblocks_workflow');
@@ -242,6 +270,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       type: 'function',
       position: { x: 100, y: 100 },
       panelId: undefined,
+      parentId: undefined,
       properties: {
         function_name: 'main',
         parameters: '',
@@ -251,12 +280,36 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       inputs: [],
       outputs: [{ id: 'output', name: 'Output', type: 'any' }],
     };
+
+    // Create default variable node as child of main function
+    const variableNode: WorkflowNode = {
+      id: 'default-variable',
+      type: 'variable',
+      position: { x: 120, y: 166 }, // Below main function with indent
+      panelId: undefined,
+      parentId: 'main-function',
+      properties: getDefaultProperties('variable'),
+      inputs: getDefaultInputs('variable'),
+      outputs: getDefaultOutputs('variable'),
+    };
+
+    // Create default print node as child of main function
+    const printNode: WorkflowNode = {
+      id: 'default-print',
+      type: 'print',
+      position: { x: 120, y: 232 }, // Below variable node
+      panelId: undefined,
+      parentId: 'main-function',
+      properties: getDefaultProperties('print'),
+      inputs: getDefaultInputs('print'),
+      outputs: getDefaultOutputs('print'),
+    };
     
-    setNodes([mainFunction]);
+    setNodes([mainFunction, variableNode, printNode]);
     setConnections([]);
     setSelectedNode(null);
     setActiveFunctionId('main-function');
-    onConsoleOutput?.(prev => [...prev, '🔄 Workflow reset with main function']);
+    onConsoleOutput?.(prev => [...prev, '🔄 Created new workflow with main function, variable, and print nodes']);
   }, [onConsoleOutput]);
 
   const handleNodeDrag = useCallback((nodeId: string, position: Position) => {
@@ -2091,6 +2144,12 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       onRegisterExport(exportWorkflow);
     }
   }, [onRegisterExport, exportWorkflow]);
+
+  useEffect(() => {
+    if (onRegisterNew) {
+      onRegisterNew(resetWorkflow);
+    }
+  }, [onRegisterNew, resetWorkflow]);
 
   // Register search callbacks
   useEffect(() => {

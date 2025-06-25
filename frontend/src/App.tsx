@@ -23,6 +23,7 @@ function App() {
   const saveCallbackRef = useRef<(() => void) | null>(null);
   const importWorkflowCallbackRef = useRef<((workflowData: any) => void) | null>(null);
   const exportCallbackRef = useRef<(() => void) | null>(null);
+  const newWorkflowCallbackRef = useRef<(() => void) | null>(null);
   
   // Search callbacks that will be implemented by WorkflowEditor
   const performSearchCallbackRef = useRef<((term: string) => void) | null>(null);
@@ -57,6 +58,10 @@ function App() {
 
   const setExportCallback = useCallback((callback: (() => void) | null) => {
     exportCallbackRef.current = callback;
+  }, []);
+
+  const setNewWorkflowCallback = useCallback((callback: (() => void) | null) => {
+    newWorkflowCallbackRef.current = callback;
   }, []);
 
   const handleConsoleOutput = useCallback((updater: (prev: string[]) => string[]) => {
@@ -110,6 +115,12 @@ function App() {
   const handleExport = useCallback(() => {
     if (exportCallbackRef.current) {
       exportCallbackRef.current();
+    }
+  }, []);
+
+  const handleNew = useCallback(() => {
+    if (newWorkflowCallbackRef.current) {
+      newWorkflowCallbackRef.current();
     }
   }, []);
 
@@ -202,6 +213,7 @@ function App() {
           onConsoleOutput={handleConsoleOutput}
           onImportWorkflow={handleImportWorkflow}
           onExport={handleExport}
+          onNew={handleNew}
           searchValue={searchValue}
           searchResults={searchResults}
           currentSearchIndex={currentSearchIndex}
@@ -228,6 +240,7 @@ function App() {
                   onRegisterExport={setExportCallback}
                   onRegisterSave={setSaveCallback}
                   onRegisterImportWorkflow={setImportWorkflowCallback}
+                  onRegisterNew={setNewWorkflowCallback}
                   onRegisterPerformSearch={setPerformSearchCallback}
                   onRegisterFindNext={setFindNextCallback}
                   onRegisterFindPrevious={setFindPreviousCallback}
@@ -253,6 +266,7 @@ function App() {
                   onRegisterExport={setExportCallback}
                   onRegisterSave={setSaveCallback}
                   onRegisterImportWorkflow={setImportWorkflowCallback}
+                  onRegisterNew={setNewWorkflowCallback}
                   onRegisterPerformSearch={setPerformSearchCallback}
                   onRegisterFindNext={setFindNextCallback}
                   onRegisterFindPrevious={setFindPreviousCallback}
