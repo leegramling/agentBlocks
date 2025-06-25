@@ -735,9 +735,75 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [nodes, handleNodeSelect, onConsoleOutput]);
 
+  // Generate Python code
+  const generatePythonCode = useCallback(() => {
+    console.log('generatePythonCode called, nodes:', nodes.length, 'connections:', connections.length);
+    onConsoleOutput?.(prev => [...prev, '🐍 Generating Python code...']);
+    onConsoleOutput?.(prev => [...prev, `📊 Processing ${nodes.length} nodes and ${connections.length} connections`]);
+    
+    const functionNodes = nodes.filter(n => n.type === 'function');
+    const regularNodes = nodes.filter(n => n.type !== 'function');
+    
+    console.log('Function nodes:', functionNodes.map(n => ({ id: n.id, type: n.type, name: n.properties?.function_name })));
+    console.log('Regular nodes:', regularNodes.map(n => ({ id: n.id, type: n.type, parent: n.parentId })));
+    
+    onConsoleOutput?.(prev => [...prev, `🔧 Found ${functionNodes.length} functions: ${functionNodes.map(n => n.properties?.function_name || 'unnamed').join(', ')}`]);
+    onConsoleOutput?.(prev => [...prev, `📦 Found ${regularNodes.length} regular nodes: ${regularNodes.map(n => n.type).join(', ')}`]);
+    
+    const generator = new PythonNodeGenerator();
+    const result = generator.generateWorkflowCode(nodes, connections);
+    
+    console.log('Generated Python code:', result);
+    onConsoleOutput?.(prev => [...prev, `✅ Generated Python code (${result.length} characters, ${result.split('\n').length} lines)`]);
+    
+    // Show first few lines of code
+    if (result.length > 0) {
+      const codePreview = result.split('\n').slice(0, 3).join('\n');
+      onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
+    } else {
+      onConsoleOutput?.(prev => [...prev, '⚠️ No code generated - check node structure']);
+    }
+    
+    return result;
+  }, [nodes, connections, onConsoleOutput]);
+
+  // Generate Rust code
+  const generateRustCode = useCallback(() => {
+    onConsoleOutput?.(prev => [...prev, '🦀 Generating Rust code...']);
+    onConsoleOutput?.(prev => [...prev, `📊 Processing ${nodes.length} nodes and ${connections.length} connections`]);
+    
+    const functionNodes = nodes.filter(n => n.type === 'function');
+    const regularNodes = nodes.filter(n => n.type !== 'function');
+    
+    onConsoleOutput?.(prev => [...prev, `🔧 Found ${functionNodes.length} functions: ${functionNodes.map(n => n.properties?.function_name || 'unnamed').join(', ')}`]);
+    onConsoleOutput?.(prev => [...prev, `📦 Found ${regularNodes.length} regular nodes: ${regularNodes.map(n => n.type).join(', ')}`]);
+    
+    const generator = new RustNodeGenerator();
+    const result = generator.generateWorkflowCode(nodes, connections);
+    
+    onConsoleOutput?.(prev => [...prev, `✅ Generated Rust code (${result.length} characters, ${result.split('\n').length} lines)`]);
+    
+    // Show first few lines of code
+    const codePreview = result.split('\n').slice(0, 3).join('\n');
+    onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
+    
+    return result;
+  }, [nodes, connections, onConsoleOutput]);
+
   // Register search and find callbacks directly (these are defined above)
   if (onRegisterPerformSearch) {
     onRegisterPerformSearch(performSearch);
+  }
+  
+  // Register code generation callbacks directly (now that functions are defined)
+  if (onRegisterGeneratePythonCode) {
+    console.log('Direct registration: Registering generatePythonCode');
+    onRegisterGeneratePythonCode(generatePythonCode);
+  }
+  
+  if (onRegisterGenerateRustCode) {
+    console.log('Direct registration: Registering generateRustCode');
+    onRegisterGenerateRustCode(generateRustCode);
   }
 
   const findNext = useCallback(() => {
@@ -764,6 +830,11 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   }
   if (onRegisterFindPrevious) {
     onRegisterFindPrevious(findPrevious);
+  }
+
+  // Register remaining callbacks that are defined later in the component
+  if (onRegisterNew) {
+    onRegisterNew(resetWorkflow);
   }
 
   // Keyboard handler for F2, 'i', navigation keys (moved after function definitions)
@@ -1467,27 +1538,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     }
   }, [filteredNodeTypes, selectedInsertIndex, handleInsertNode]);
 
-  // Store registration functions to call later
-  const registrationFunctionsRef = useRef({
-    onRegisterGeneratePythonCode,
-    onRegisterGenerateRustCode,
-    onRegisterExecute,
-    onRegisterSave,
-    onRegisterImportWorkflow,
-    onRegisterExport,
-    onRegisterNew
-  });
 
-  // Update refs when props change
-  registrationFunctionsRef.current = {
-    onRegisterGeneratePythonCode,
-    onRegisterGenerateRustCode,
-    onRegisterExecute,
-    onRegisterSave,
-    onRegisterImportWorkflow,
-    onRegisterExport,
-    onRegisterNew
-  };
 
   console.log('About to return component JSX...');
 
@@ -2017,61 +2068,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     </div>
   );
 
-  // Generate Python code
-  const generatePythonCode = useCallback(() => {
-    console.log('generatePythonCode called, nodes:', nodes.length, 'connections:', connections.length);
-    onConsoleOutput?.(prev => [...prev, '🐍 Generating Python code...']);
-    onConsoleOutput?.(prev => [...prev, `📊 Processing ${nodes.length} nodes and ${connections.length} connections`]);
-    
-    const functionNodes = nodes.filter(n => n.type === 'function');
-    const regularNodes = nodes.filter(n => n.type !== 'function');
-    
-    console.log('Function nodes:', functionNodes.map(n => ({ id: n.id, type: n.type, name: n.properties?.function_name })));
-    console.log('Regular nodes:', regularNodes.map(n => ({ id: n.id, type: n.type, parent: n.parentId })));
-    
-    onConsoleOutput?.(prev => [...prev, `🔧 Found ${functionNodes.length} functions: ${functionNodes.map(n => n.properties?.function_name || 'unnamed').join(', ')}`]);
-    onConsoleOutput?.(prev => [...prev, `📦 Found ${regularNodes.length} regular nodes: ${regularNodes.map(n => n.type).join(', ')}`]);
-    
-    const generator = new PythonNodeGenerator();
-    const result = generator.generateWorkflowCode(nodes, connections);
-    
-    console.log('Generated Python code:', result);
-    onConsoleOutput?.(prev => [...prev, `✅ Generated Python code (${result.length} characters, ${result.split('\n').length} lines)`]);
-    
-    // Show first few lines of code
-    if (result.length > 0) {
-      const codePreview = result.split('\n').slice(0, 3).join('\n');
-      onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
-    } else {
-      onConsoleOutput?.(prev => [...prev, '⚠️ No code generated - check node structure']);
-    }
-    
-    return result;
-  }, [nodes, connections, onConsoleOutput]);
-
-  // Generate Rust code
-  const generateRustCode = useCallback(() => {
-    onConsoleOutput?.(prev => [...prev, '🦀 Generating Rust code...']);
-    onConsoleOutput?.(prev => [...prev, `📊 Processing ${nodes.length} nodes and ${connections.length} connections`]);
-    
-    const functionNodes = nodes.filter(n => n.type === 'function');
-    const regularNodes = nodes.filter(n => n.type !== 'function');
-    
-    onConsoleOutput?.(prev => [...prev, `🔧 Found ${functionNodes.length} functions: ${functionNodes.map(n => n.properties?.function_name || 'unnamed').join(', ')}`]);
-    onConsoleOutput?.(prev => [...prev, `📦 Found ${regularNodes.length} regular nodes: ${regularNodes.map(n => n.type).join(', ')}`]);
-    
-    const generator = new RustNodeGenerator();
-    const result = generator.generateWorkflowCode(nodes, connections);
-    
-    onConsoleOutput?.(prev => [...prev, `✅ Generated Rust code (${result.length} characters, ${result.split('\n').length} lines)`]);
-    
-    // Show first few lines of code
-    const codePreview = result.split('\n').slice(0, 3).join('\n');
-    onConsoleOutput?.(prev => [...prev, `📝 Code preview:\n${codePreview}${result.split('\n').length > 3 ? '\n...' : ''}`]);
-    
-    return result;
-  }, [nodes, connections, onConsoleOutput]);
-
   // Save workflow
   const saveWorkflow = useCallback(() => {
     const workflowData = {
@@ -2161,40 +2157,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     onConsoleOutput?.(prev => [...prev, '✅ Workflow execution completed']);
   }, [nodes, connections, activeFunctionId, generatePythonCode, onConsoleOutput]);
 
-  console.log('DEBUG: Reached end of executeWorkflow function definition');
-
-  // Direct callback registration - ALL functions are now defined above
-  console.log('DIRECT REGISTRATION: All functions defined, registering callbacks now');
-  const refs = registrationFunctionsRef.current;
-  
-  if (refs.onRegisterGeneratePythonCode) {
-    console.log('DIRECT: Registering generatePythonCode callback');
-    refs.onRegisterGeneratePythonCode(generatePythonCode);
-  }
-  if (refs.onRegisterGenerateRustCode) {
-    console.log('DIRECT: Registering generateRustCode callback');
-    refs.onRegisterGenerateRustCode(generateRustCode);
-  }
-  if (refs.onRegisterExecute) {
-    console.log('DIRECT: Registering execute callback');
-    refs.onRegisterExecute(executeWorkflow);
-  }
-  if (refs.onRegisterSave) {
-    console.log('DIRECT: Registering save callback');
-    refs.onRegisterSave(saveWorkflow);
-  }
-  if (refs.onRegisterImportWorkflow) {
-    console.log('DIRECT: Registering import callback');
-    refs.onRegisterImportWorkflow(handleImportWorkflow);
-  }
-  if (refs.onRegisterExport) {
-    console.log('DIRECT: Registering export callback');
-    refs.onRegisterExport(exportWorkflow);
-  }
-  if (refs.onRegisterNew) {
-    console.log('DIRECT: Registering new callback');
-    refs.onRegisterNew(resetWorkflow);
-  }
 
   // Register search results and index updates
   useEffect(() => {
