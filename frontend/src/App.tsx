@@ -145,10 +145,18 @@ function App() {
   }, []);
 
   const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && searchResults.length > 0) {
+    if (e.key === 'Enter' && searchValue.trim() !== '') {
       e.preventDefault();
-      if (findNextCallbackRef.current) {
-        findNextCallbackRef.current();
+      if (searchResults.length > 0) {
+        // If we already have search results, navigate to next
+        if (findNextCallbackRef.current) {
+          findNextCallbackRef.current();
+        }
+      } else {
+        // If no search results yet, ensure search is performed
+        if (performSearchCallbackRef.current) {
+          performSearchCallbackRef.current(searchValue);
+        }
       }
     } else if (e.key === 'Escape') {
       setSearchValue('');
@@ -158,7 +166,7 @@ function App() {
         performSearchCallbackRef.current('');
       }
     }
-  }, [searchResults.length]);
+  }, [searchValue, searchResults.length]);
 
   const handleFindNext = useCallback(() => {
     if (findNextCallbackRef.current) {
