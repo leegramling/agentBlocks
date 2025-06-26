@@ -26,19 +26,43 @@ const LLMQueryPanel: React.FC<LLMQueryPanelProps> = ({ onConsoleOutput, onImport
 
   const checkOllamaStatus = async () => {
     try {
-      const response = await fetch('http://localhost:11434/api/tags');
+      console.log('Checking Ollama connection at http://localhost:11434/api/tags');
+      const response = await fetch('http://localhost:11434/api/tags', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      console.log('Ollama response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Ollama response data:', data);
         const models = data.models?.map((model: any) => model.name) || [];
         setAvailableModels(models);
         setOllamaStatus('connected');
+        console.log('Ollama connected successfully. Available models:', models);
         if (models.length > 0 && !selectedModel) {
           setSelectedModel(models[0]);
         }
       } else {
+        console.error('Ollama returned non-OK status:', response.status, response.statusText);
         setOllamaStatus('disconnected');
       }
     } catch (error) {
+      console.error('Ollama connection error:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        // Check for specific error types
+        if (error.name === 'AbortError') {
+          console.error('Ollama request timed out');
+        } else if (error.message.includes('fetch')) {
+          console.error('Network error - make sure Ollama is running on localhost:11434');
+        }
+      }
       setOllamaStatus('disconnected');
     }
   };
@@ -193,10 +217,12 @@ ${pythonCode}
 \`\`\``;
       }
 
+      console.log('Sending query to Ollama with model:', selectedModel);
       const response = await fetch('http://localhost:11434/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({
           model: selectedModel || 'llama2',
@@ -207,6 +233,8 @@ ${pythonCode}
             top_p: 0.9
           }
         }),
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(30000)
       });
 
       if (response.ok) {
@@ -241,10 +269,22 @@ ${pythonCode}
           setLastGeneratedWorkflow(null);
         }
       } else {
-        onConsoleOutput?.(prev => [...prev, `❌ Error: Failed to get response from LLM (${response.status})`]);
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('Ollama API error:', response.status, response.statusText, errorText);
+        onConsoleOutput?.(prev => [...prev, `❌ Error: Failed to get response from LLM (${response.status}: ${response.statusText})`]);
       }
     } catch (error) {
-      onConsoleOutput?.(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
+      console.error('LLM query error:', error);
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timed out - LLM may be slow to respond';
+        } else if (error.message.includes('fetch')) {
+          errorMessage = 'Connection error - ensure Ollama is running on localhost:11434';
+        }
+      }
+      onConsoleOutput?.(prev => [...prev, `❌ Error: ${errorMessage}`]);
     } finally {
       setIsLoading(false);
     }
@@ -355,6 +395,22 @@ ${pythonCode}
               <>
                 <div className="status-dot disconnected"></div>
                 <span>Ollama not running</span>
+                <button
+                  onClick={checkOllamaStatus}
+                  style={{
+                    marginLeft: '8px',
+                    padding: '2px 6px',
+                    fontSize: '10px',
+                    backgroundColor: '#374151',
+                    border: '1px solid #4b5563',
+                    borderRadius: '3px',
+                    color: '#d1d5db',
+                    cursor: 'pointer'
+                  }}
+                  title="Retry connection to Ollama"
+                >
+                  Retry
+                </button>
               </>
             )}
           </div>
@@ -364,6 +420,10 @@ ${pythonCode}
           <div className="ollama-help">
             <p>Start Ollama to use AI assistance:</p>
             <code>ollama serve</code>
+            <p style={{fontSize: '12px', color: '#9ca3af', marginTop: '8px'}}>
+              Make sure Ollama is running on <strong>localhost:11434</strong><br/>
+              Check console for detailed connection errors.
+            </p>
           </div>
         )}
       </div>
