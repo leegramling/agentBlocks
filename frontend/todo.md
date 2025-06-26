@@ -4,10 +4,16 @@
 *All critical issues have been resolved*
 
 ## High Priority  
-- [ ] Make the left property panel a fixed size with vertical scroll bar.
-- [ ] remove the Run, Pause, Stop buttons.
+- [ ] Make the left propertiesPanel a fixed height 50% with vertical scroll bar.
 
 ## Medium Priority
+- [ ] remove the TreeView component and all references.
+- [ ] Lets keep track for variables, create a new Tab Local Variables in in the PropertiesPanel and add table of the variables in the function, these can be used as reference in other nodes. The First tab should say Properties.
+- [ ] In the Edit menu add Copy, Paste, Cut, Duplicate (for nodes) 
+- [ ] In the View Menu add Reset, Center (which centers the view on the selected node), Zoom In, Zoom Out
+- [ ] Remove the Workflow and Tools menu 
+- [ ] check the llm api, it seems like we are not connected even though it shows we are.
+- [ ] write a doc bashNodes.md and explore using nodes to create bash scripts that can call linux commands like find, grep, nawk, sed, and check for files exists, and other useful command that could be used to create bashscripts.
 
 
 ## Low Priority
@@ -18,6 +24,7 @@
 - [ ] Update documentation to reflect function-based system
 
 ## Completed ✅
+- [X] remove the Run, Pause, Stop buttons.
 - [x] Add console output for code generation functions and ensure Show Code/Execute work
 - [x] Add vertical color bar to all nodes in same function
 - [x] Add code preview textbox in right panel with Python/Rust toggle (made taller to fill panel)

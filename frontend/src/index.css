@@ -341,9 +341,8 @@ body {
 }
 
 .right-panel {
-  width: 320px;
-  min-width: 320px;
-  max-width: 320px;
+  width: 50%;
+  min-width: 300px;
   background-color: #1f2937;
   border-left: 1px solid #374151;
   display: flex;

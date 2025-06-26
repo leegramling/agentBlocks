@@ -62,8 +62,12 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
+  const [showEditMenu, setShowEditMenu] = useState(false);
+  const [showViewMenu, setShowViewMenu] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fileMenuRef = useRef<HTMLDivElement>(null);
+  const editMenuRef = useRef<HTMLDivElement>(null);
+  const viewMenuRef = useRef<HTMLDivElement>(null);
 
   // Register callbacks with parent components
   React.useEffect(() => {
@@ -75,19 +79,25 @@ const Layout: React.FC<LayoutProps> = ({
     }
   }, [onRegisterToggleHelpModal, onRegisterFocusSearchField]);
 
-  // Close file menu when clicking outside
+  // Close menus when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
         setShowFileMenu(false);
       }
+      if (editMenuRef.current && !editMenuRef.current.contains(event.target as Node)) {
+        setShowEditMenu(false);
+      }
+      if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
+        setShowViewMenu(false);
+      }
     };
 
-    if (showFileMenu) {
+    if (showFileMenu || showEditMenu || showViewMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showFileMenu]);
+  }, [showFileMenu, showEditMenu, showViewMenu]);
 
   return (
     <div className="layout">
@@ -135,10 +145,113 @@ const Layout: React.FC<LayoutProps> = ({
                 </div>
               )}
             </div>
-            <button className="nav-button">Edit</button>
-            <button className="nav-button">View</button>
-            <button className="nav-button">Workflow</button>
-            <button className="nav-button">Tools</button>
+            
+            <div className="nav-menu-item" ref={editMenuRef}>
+              <button 
+                className="nav-button" 
+                onClick={() => setShowEditMenu(prev => !prev)}
+              >
+                Edit
+              </button>
+              {showEditMenu && (
+                <div className="dropdown-menu">
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement copy functionality
+                      console.log('Copy node');
+                      setShowEditMenu(false);
+                    }}
+                  >
+                    Copy
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement paste functionality
+                      console.log('Paste node');
+                      setShowEditMenu(false);
+                    }}
+                  >
+                    Paste
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement cut functionality
+                      console.log('Cut node');
+                      setShowEditMenu(false);
+                    }}
+                  >
+                    Cut
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement duplicate functionality
+                      console.log('Duplicate node');
+                      setShowEditMenu(false);
+                    }}
+                  >
+                    Duplicate
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <div className="nav-menu-item" ref={viewMenuRef}>
+              <button 
+                className="nav-button" 
+                onClick={() => setShowViewMenu(prev => !prev)}
+              >
+                View
+              </button>
+              {showViewMenu && (
+                <div className="dropdown-menu">
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement reset functionality
+                      console.log('Reset view');
+                      setShowViewMenu(false);
+                    }}
+                  >
+                    Reset
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement center functionality
+                      console.log('Center view');
+                      setShowViewMenu(false);
+                    }}
+                  >
+                    Center
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement zoom in functionality
+                      console.log('Zoom in');
+                      setShowViewMenu(false);
+                    }}
+                  >
+                    Zoom In
+                  </button>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      // TODO: Implement zoom out functionality
+                      console.log('Zoom out');
+                      setShowViewMenu(false);
+                    }}
+                  >
+                    Zoom Out
+                  </button>
+                </div>
+              )}
+            </div>
+            
             <button className="nav-button" onClick={() => setShowHelpModal(true)}>Help</button>
           </nav>
         </div>

@@ -26,6 +26,7 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
 }, ref) => {
   const propertyInputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const [codeLanguage, setCodeLanguage] = useState<'python' | 'rust'>('python');
+  const [activeTab, setActiveTab] = useState<'properties' | 'variables'>('properties');
 
   const generatePreviewCode = () => {
     if (nodes.length === 0) return '// No nodes in workflow';
@@ -38,6 +39,45 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
       const generator = new TemplateBasedRustGenerator();
       return generator.generateWorkflowCode(nodes, connections);
     }
+  };
+
+  const getLocalVariables = () => {
+    if (!activeFunctionId) return [];
+    
+    // Get all nodes in the current function
+    const functionNodes = nodes.filter(node => 
+      node.parentId === activeFunctionId || node.id === activeFunctionId
+    );
+    
+    // Extract variables from nodes
+    const variables: Array<{name: string, type: string, value: string, nodeId: string}> = [];
+    
+    functionNodes.forEach(node => {
+      if (node.type === 'variable' && node.properties?.name) {
+        variables.push({
+          name: node.properties.name,
+          type: 'variable',
+          value: node.properties.value || '',
+          nodeId: node.id
+        });
+      } else if (node.type === 'list_create' && node.properties?.name) {
+        variables.push({
+          name: node.properties.name,
+          type: 'list',
+          value: JSON.stringify(node.properties.items || []),
+          nodeId: node.id
+        });
+      } else if (node.type === 'dict_create' && node.properties?.name) {
+        variables.push({
+          name: node.properties.name,
+          type: 'dict',
+          value: JSON.stringify(node.properties.items || {}),
+          nodeId: node.id
+        });
+      }
+    });
+    
+    return variables;
   };
 
   useImperativeHandle(ref, () => ({
@@ -339,17 +379,52 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
 
   return (
     <div className="right-panel">
-      {/* Header */}
+      {/* Header with Tabs */}
       <div className="panel-header">
         <h3 className="panel-title">Properties</h3>
         <div style={{fontSize: '12px', color: '#9ca3af', marginTop: '4px'}}>
           {selectedNode.type.charAt(0).toUpperCase() + selectedNode.type.slice(1)} Node
         </div>
+        
+        {/* Tab Navigation */}
+        <div style={{display: 'flex', marginTop: '12px', gap: '8px'}}>
+          <button
+            onClick={() => setActiveTab('properties')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              borderRadius: '4px',
+              border: 'none',
+              backgroundColor: activeTab === 'properties' ? '#3b82f6' : '#374151',
+              color: '#ffffff',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            Properties
+          </button>
+          <button
+            onClick={() => setActiveTab('variables')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              borderRadius: '4px',
+              border: 'none',
+              backgroundColor: activeTab === 'variables' ? '#3b82f6' : '#374151',
+              color: '#ffffff',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            Local Variables
+          </button>
+        </div>
       </div>
 
-      {/* Properties */}
+      {/* Tab Content */}
       <div className="panel-content">
-        <div className="properties-section">
+        {activeTab === 'properties' ? (
+          <div className="properties-section">
           {/* Property Table */}
           <table className="property-table">
             <thead>
@@ -473,6 +548,80 @@ const PropertiesPanel = forwardRef<PropertiesPanelRef, PropertiesPanelProps>(({
           </div>
 
         </div>
+        ) : (
+          <div className="variables-section">
+            {/* Local Variables Table */}
+            <div style={{fontSize: '12px', fontWeight: '600', color: '#d1d5db', marginBottom: '12px'}}>
+              Local Variables in Function
+            </div>
+            
+            {(() => {
+              const localVars = getLocalVariables();
+              if (localVars.length === 0) {
+                return (
+                  <div style={{textAlign: 'center', color: '#6b7280', fontSize: '14px', padding: '20px'}}>
+                    No variables found in current function
+                  </div>
+                );
+              }
+              
+              return (
+                <table className="property-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Value</th>
+                      <th>Node</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {localVars.map((variable, index) => (
+                      <tr key={index}>
+                        <td style={{fontWeight: '600', color: '#60a5fa'}}>{variable.name}</td>
+                        <td className="value">{variable.type}</td>
+                        <td className="value" style={{maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                          {variable.value || 'undefined'}
+                        </td>
+                        <td className="value">
+                          <button
+                            onClick={() => {
+                              const node = nodes.find(n => n.id === variable.nodeId);
+                              if (node) onNodeSelect(node);
+                            }}
+                            style={{
+                              fontSize: '10px',
+                              padding: '2px 6px',
+                              backgroundColor: '#374151',
+                              border: '1px solid #4b5563',
+                              borderRadius: '3px',
+                              color: '#d1d5db',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Select
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+            
+            {/* Variables Usage Help */}
+            <div style={{marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #374151'}}>
+              <div style={{fontSize: '12px', fontWeight: '600', color: '#d1d5db', marginBottom: '8px'}}>
+                Usage in Other Nodes
+              </div>
+              <div style={{fontSize: '11px', color: '#9ca3af', lineHeight: '1.4'}}>
+                Reference these variables in other nodes using their names. For example:
+                <br />• Use <code style={{backgroundColor: '#374151', padding: '1px 4px', borderRadius: '2px'}}>{'{variable_name}'}</code> in text fields
+                <br />• Variables are available within the same function scope
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
