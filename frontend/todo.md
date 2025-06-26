@@ -4,11 +4,10 @@
 *All critical issues have been resolved*
 
 ## High Priority  
-- [ ] Add input field to left of Run button for search, and have / or ctrl F go to that field to show search name.
+- [ ] Make the left property panel a fixed size with vertical scroll bar.
+- [ ] remove the Run, Pause, Stop buttons.
 
 ## Medium Priority
-- [ ] move the key mapping to right side and make the text lighter and under any nodes.
-- [ ] lets have a example nodes for debugging with a main function, with a list of fruits and a for each to print them.
 
 
 ## Low Priority
@@ -41,6 +40,9 @@
 - [x] Update NodeComponent to show active function styling
 
 ## Approved
+- [X] Add input field to left of Run button for search, and have / or ctrl F go to that field to show search name.
+- [X] move the key mapping to right side and make the text lighter and under any nodes.
+- [X] lets have a example nodes for debugging with a main function, with a list of fruits and a for each to print them.
 - [x] Remove module panels and Add Module button from UI
 - [x] Create default 'main' function node on workflow start
 - [x] Implement function node active state management

@@ -185,19 +185,6 @@ const Layout: React.FC<LayoutProps> = ({
           )}
         </div>
         
-        <button 
-          className="control-button disabled"
-          disabled={true}
-          title="Temporarily disabled"
-        >
-          ▶ Run
-        </button>
-        <button className="control-button disabled" disabled={true} title="Temporarily disabled">
-          ⏸ Pause
-        </button>
-        <button className="control-button disabled" disabled={true} title="Temporarily disabled">
-          ⏹ Stop
-        </button>
         <button className="control-button disabled" disabled={true} title="Temporarily disabled">
           🔧
         </button>
