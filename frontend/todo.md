@@ -4,15 +4,12 @@
 *All critical issues have been resolved*
 
 ## High Priority  
-- [ ] Make the left propertiesPanel a fixed height 50% with vertical scroll bar.
+- [ ] Create a new default node graph with Function Main, Variable counter =1, List Create, Foreach, print child of Foreach that prints counter and fruit. Implement the foreach and list create for python and rust.
+- [ ] Make sure that we can tab to indent and make a node child of the above node and Shift tab to undend remove from parent.
+- [ ] Make sure we can drag and drop nodes to reparent and that they are always in a function graph.
 
 ## Medium Priority
-- [ ] remove the TreeView component and all references.
-- [ ] Lets keep track for variables, create a new Tab Local Variables in in the PropertiesPanel and add table of the variables in the function, these can be used as reference in other nodes. The First tab should say Properties.
-- [ ] In the Edit menu add Copy, Paste, Cut, Duplicate (for nodes) 
-- [ ] In the View Menu add Reset, Center (which centers the view on the selected node), Zoom In, Zoom Out
-- [ ] Remove the Workflow and Tools menu 
-- [ ] check the llm api, it seems like we are not connected even though it shows we are.
+- [ ] check the llm api, it seems like we are not connected even though it shows we are. make a test call to the llm if it is connected asking the model name and details.
 - [ ] write a doc bashNodes.md and explore using nodes to create bash scripts that can call linux commands like find, grep, nawk, sed, and check for files exists, and other useful command that could be used to create bashscripts.
 
 
@@ -24,6 +21,12 @@
 - [ ] Update documentation to reflect function-based system
 
 ## Completed ✅
+- [X] Make the left propertiesPanel a fixed height 50% with vertical scroll bar.
+- [X] Lets keep track for variables, create a new Tab Local Variables in in the PropertiesPanel and add table of the variables in the function, these can be used as reference in other nodes. The First tab should say Properties.
+- [X] In the Edit menu add Copy, Paste, Cut, Duplicate (for nodes) 
+- [X] In the View Menu add Reset, Center (which centers the view on the selected node), Zoom In, Zoom Out
+- [X] Remove the Workflow and Tools menu 
+- [X] remove the TreeView component and all references.
 - [X] remove the Run, Pause, Stop buttons.
 - [x] Add console output for code generation functions and ensure Show Code/Execute work
 - [x] Add vertical color bar to all nodes in same function
